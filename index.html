@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Internal Mooring App - Leaflet Live (Inspection Join + Customer Gate)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    :root { --bg:#f8fafc; --card:#fff; --text:#0f172a; --muted:#64748b; --line:#e2e8f0; --primary:#0f172a; --primary-soft:#e0f2fe; --shadow:0 8px 22px rgba(15,23,42,.06); --radius:20px; --danger:#b91c1c; --danger-soft:#fee2e2; --danger-pin:#dc2626; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg)}
+    .container{max-width:1480px;margin:0 auto;padding:24px}
+    .header{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+    .badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+    .badge{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;background:#f1f5f9;border:1px solid var(--line);font-size:12px;font-weight:600}
+    .badge.secondary{background:#eef2ff;color:#3730a3;border-color:#c7d2fe}
+    .badge.alert{background:#fff1f2;color:var(--danger);border-color:#fecdd3}
+    h1{margin:0;font-size:30px;line-height:1.2}
+    .subtitle{margin-top:8px;color:var(--muted);font-size:14px;max-width:1040px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    button{border:1px solid #cbd5e1;background:#fff;color:var(--text);border-radius:16px;padding:10px 14px;font-size:14px;font-weight:600;cursor:pointer;transition:.18s ease;box-shadow:0 1px 0 rgba(15,23,42,.03)}
+    button:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+    button.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+    button.ghost{background:#fff}
+    button.small{padding:8px 12px;font-size:13px;border-radius:12px}
+    button.danger{border-color:#fecaca;color:var(--danger);background:#fff1f2}
+
+    .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:20px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+    .stat-card{padding:20px}
+    .stat-top{display:flex;align-items:center;gap:12px}
+    .icon-box{width:40px;height:40px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-size:18px}
+    .stat-label{font-size:13px;color:var(--muted)}
+    .stat-value{font-size:28px;font-weight:700}
+    .stat-sub{font-size:12px;color:var(--muted)}
+
+    .main-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(340px,.9fr);gap:24px;align-items:start}
+    .panel-head{padding:22px 22px 0 22px}
+    .panel-title{font-size:22px;font-weight:700;margin:0}
+    .panel-desc{font-size:14px;color:var(--muted);margin-top:8px}
+    .panel-body{padding:20px 22px 22px 22px}
+    .filters-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .field{width:100%;border:1px solid #cbd5e1;border-radius:16px;padding:12px 14px;font-size:14px;outline:none;background:#fff}
+    .field:focus{border-color:#0ea5e9;box-shadow:0 0 0 4px rgba(14,165,233,.12)}
+
+    #map{height:720px;width:100%;border-radius:18px;overflow:hidden;border:1px solid var(--line)}
+    .leaflet-popup-content{min-width:260px}
+    .leaflet-container a{color:#0369a1}
+
+    .legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
+    .legend-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;font-size:12px;color:var(--muted)}
+    .legend-dot{width:12px;height:12px;border-radius:999px;display:inline-block}
+
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:#fff;margin-top:16px}
+    table{width:100%;border-collapse:collapse;min-width:900px}
+    thead{background:#f8fafc;color:var(--muted)}
+    th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;font-size:13px}
+    tbody tr{cursor:pointer}
+    tbody tr:hover{background:#f8fafc}
+    tbody tr.active{background:var(--primary-soft)}
+
+    .detail-card{position:sticky;top:24px}
+    .detail-top{background:#f8fafc;border-radius:18px;padding:16px;margin-bottom:16px}
+    .detail-top-title{margin-top:12px;font-size:20px;font-weight:700}
+    .detail-top-sub{margin-top:4px;color:var(--muted);font-size:14px}
+    .detail-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .detail-item{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fff}
+    .detail-key{font-size:12px;color:var(--muted)}
+    .detail-val{margin-top:6px;font-size:14px;font-weight:600;color:var(--text);word-break:break-word}
+    .detail-sub{margin-top:6px;font-size:12px;color:var(--muted);word-break:break-word}
+    .muted-box{border:1px solid var(--line);border-radius:16px;padding:12px 14px;font-size:14px;color:var(--muted);background:#f8fafc}
+    .hidden{display:none!important}
+    .error-box{margin-top:14px;background:#fffbeb;color:#92400e;border:1px solid #fcd34d;padding:12px 14px;border-radius:14px;font-size:14px}
+    .alert-text{color:var(--danger)!important;font-weight:800!important}
+    .alert-note{color:var(--danger)!important}
+
+    .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:5000}
+    .modal-card{width:min(520px,100%);background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 24px 70px rgba(15,23,42,.24);overflow:hidden}
+    .modal-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .modal-title{margin:0;font-size:18px;font-weight:700}
+    .modal-body{padding:20px}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+    .inline-note{font-size:12px;color:var(--muted);margin-top:8px}
+    .field-label{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
+    .code-error{margin-top:10px;padding:10px 12px;border-radius:12px;background:#fff1f2;border:1px solid #fecdd3;color:#be123c;font-size:13px}
+    .customer-grid{display:grid;grid-template-columns:1fr;gap:12px}
+    .customer-item{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:#fff}
+    .customer-key{font-size:12px;color:var(--muted)}
+    .customer-val{margin-top:6px;font-size:14px;font-weight:600;word-break:break-word}
+
+    @media (max-width:1200px){
+      .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .main-grid{grid-template-columns:1fr}
+      .detail-card{position:static}
+    }
+    @media (max-width:760px){
+      .container{padding:16px}
+      .stats{grid-template-columns:1fr}
+      .filters-grid,.detail-grid,.legend{grid-template-columns:1fr}
+      #map{height:520px}
+      h1{font-size:24px}
+      .modal-card{border-radius:18px}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="badges">
+          <span class="badge">Leaflet Live Map</span>
+          <span class="badge secondary">Auckland Moorings</span>
+          <span class="badge">OpenStreetMap Tiles</span>
+          <span class="badge">ArcGIS GeoJSON</span>
+          <span class="badge">Supabase Join</span>
+          <span class="badge alert">Survey &gt; 3 Years = Red Alert</span>
+        </div>
+        <h1>Internal Mooring App - Leaflet Live</h1>
+        <div class="subtitle">This version keeps the live public mooring pins for mapping, then joins extra mooring data from Supabase by <strong>mooring_code</strong>. Boat and inspection details come from Supabase. If the last inspection is more than 3 years old from today, the map pin turns red; all other pins are green. Use the Inspection Over 3 Years button to show only the overdue pins on the map.</div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="reloadBtn">Reload Live Moorings</button>
+        <button id="resetFiltersBtn">Reset Filters</button>
+        <button id="fitAllBtn">Zoom to All Pins</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="card stat-card"><div class="stat-top"><div class="icon-box">🔎</div><div><div class="stat-label">Filtered Results</div><div class="stat-value" id="statFiltered">0</div><div class="stat-sub">Current filter result count</div></div></div></div>
+      <div class="card stat-card"><div class="stat-top"><div class="icon-box">📍</div><div><div class="stat-label">Mapped Pins</div><div class="stat-value" id="statMapped">0</div><div class="stat-sub">Visible pins on the map</div></div></div></div>
+      <div class="card stat-card"><div class="stat-top"><div class="icon-box">🚨</div><div><div class="stat-label">Inspection Over 3 Years</div><div class="stat-value" id="statOverdueInspection">0</div><div class="stat-sub">Moorings with overdue inspections</div></div></div><div class="detail-toolbar" style="margin-top:14px;"><button id="overdueOnlyBtn" class="small ghost" type="button">Show Only Overdue</button></div></div>
+    </div>
+
+    <div class="card">
+      <div class="panel-head"><h2 class="panel-title">Live Filters</h2><div class="panel-desc">Typing a Mooring Code or Boat Name updates the detail panel and automatically moves the map to the selected marker. Boat Name search uses Supabase data first, then falls back to the public ArcGIS field.</div></div>
+      <div class="panel-body">
+        <div class="filters-grid">
+          <input id="f_mooringCode" class="field" placeholder="Mooring Code" />
+          <input id="f_boatName" class="field" placeholder="Boat / Vessel Name" />
+        </div>
+        <div id="errorBox" class="error-box hidden"></div>
+      </div>
+    </div>
+
+    <div class="main-grid" style="margin-top:20px;">
+      <div>
+        <div class="card">
+          <div class="panel-head"><h2 class="panel-title">Leaflet Map</h2><div class="panel-desc">Live public mooring points are loaded from Auckland Transport's public ArcGIS layer. Extra fields such as boat name and inspection date are joined from Supabase using mooring_code. Inspection dates older than 3 years are shown as red alert pins; all other pins are green. Use the overdue button above to filter the map to only the red pins.</div></div>
+          <div class="panel-body">
+            <div id="map"></div>
+            <div class="legend" id="legend"></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mooring Code</th>
+                    <th>Boat Name</th>
+                    <th>Mooring Length</th>
+                    <th>Last Inspection</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card detail-card">
+          <div class="panel-head"><h2 class="panel-title">Detail Information</h2><div class="panel-desc">Detailed information for the selected mooring point. Boat and inspection fields come from Supabase when a mooring_code match is found.</div></div>
+          <div class="panel-body">
+            <div id="detailEmpty" class="muted-box">Select a pin or a table row to view the mooring details.</div>
+            <div id="detailContent" class="hidden">
+              <div class="detail-top">
+                <div class="badges" id="detailBadges"></div>
+                <div id="detailTitle" class="detail-top-title">-</div>
+                <div id="detailStatus" class="detail-top-sub">Live mooring record joined with Supabase registry data</div>
+                <div class="detail-toolbar">
+                  <button class="small ghost" id="customerDetailsBtn">Customer Details</button>
+                </div>
+              </div>
+              <div id="detailGrid" class="detail-grid"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="customerModalBackdrop" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customerModalTitle">
+      <div class="modal-head">
+        <h3 id="customerModalTitle" class="modal-title">Customer Details</h3>
+        <button id="customerModalClose" class="small danger" type="button">Close</button>
+      </div>
+      <div class="modal-body">
+        <div id="customerGateView">
+          <div class="muted-box">Enter the access code to unlock customer details for the selected mooring.</div>
+          <label class="field-label" for="customerAccessCodeInput">Access Code</label>
+          <input id="customerAccessCodeInput" class="field" type="password" placeholder="Enter access code" />
+          <div class="inline-note">Current code is configured in this file. Default value: <strong>akhmmr</strong>.</div>
+          <div id="customerCodeError" class="code-error hidden">Incorrect access code. Please try again.</div>
+          <div class="modal-actions">
+            <button id="customerUnlockBtn" class="primary" type="button">Unlock</button>
+          </div>
+        </div>
+        <div id="customerLoadingView" class="hidden">
+          <div class="muted-box">Loading customer details...</div>
+        </div>
+        <div id="customerDetailsView" class="hidden">
+          <div id="customerDetailsEmpty" class="muted-box hidden">No customer details were found for this mooring code.</div>
+          <div id="customerDetailsGrid" class="customer-grid"></div>
+          <div class="modal-actions">
+            <button id="customerLockBtn" class="ghost" type="button">Lock Again</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SERVICE_URL = 'https://services2.arcgis.com/JkPEgZJGxhSjYOo0/arcgis/rest/services/MooringLocations/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
+    const MAP_CENTER = [-36.84, 174.78];
+    const MAP_ZOOM = 11;
+    const SEARCH_FOCUS_ZOOM = 16;
+    const ZONE_COLORS = ['#0ea5e9', '#10b981', '#f97316', '#8b5cf6', '#e11d48', '#14b8a6', '#f59e0b', '#06b6d4', '#64748b'];
+    const STALE_PIN_COLOR = '#dc2626';
+    const CURRENT_PIN_COLOR = '#16a34a';
+
+    // =========================
+    // Supabase configuration
+    // Replace these placeholders before publishing.
+    // =========================
+    const SUPABASE_URL = 'https://hjrcnsuzrztaiwnttxnr.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_8vscwHQ7y50eUj-RywvmLQ_JGpSp2HE';
+    const SUPABASE_PUBLIC_TABLE = 'mooring_registry_join_public';
+    const SUPABASE_CUSTOMER_TABLE = 'mooring_registry_join_current';
+
+    // Customer details gate
+    const CUSTOMER_ACCESS_CODE = 'akhmmr';
+
+    const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false };
+    const registryByCode = new Map();
+    const customerDetailsCache = new Map();
+    let customerAccessGranted = false;
+    let supabaseClient = null;
+
+    const el = (id) => document.getElementById(id);
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+    const map = L.map('map', { preferCanvas: true }).setView(MAP_CENTER, MAP_ZOOM);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+    function normalizeCode(value){ return String(value || '').trim().toUpperCase(); }
+    function showError(text=''){ const box = el('errorBox'); if(!text){ box.textContent=''; box.classList.add('hidden'); return; } box.textContent=text; box.classList.remove('hidden'); }
+    function zoneColor(zone){ const z = zone || 'Unknown'; let hash=0; for(let i=0;i<z.length;i++) hash=((hash<<5)-hash)+z.charCodeAt(i); return ZONE_COLORS[Math.abs(hash)%ZONE_COLORS.length]; }
+    function formatDMM(value, kind){ if(typeof value !== 'number' || Number.isNaN(value)) return '-'; const abs=Math.abs(value); const degrees=Math.floor(abs); const minutes=(abs-degrees)*60; const hemisphere = kind==='lat' ? (value>=0?'N':'S') : (value>=0?'E':'W'); const degPad = kind==='lat'?2:3; return `${String(degrees).padStart(degPad,'0')}°${minutes.toFixed(4)}' ${hemisphere}`; }
+    function formatDateValue(value){ if(value === null || value === undefined || value === '') return '-'; if(typeof value === 'number'){ const d = new Date(value); if(!Number.isNaN(d.getTime())) return d.toLocaleDateString('en-NZ',{ day:'numeric', month:'long', year:'numeric' }); } if(typeof value === 'string'){ const trimmed = value.trim(); const d = new Date(trimmed); if(!Number.isNaN(d.getTime())) return d.toLocaleDateString('en-NZ',{ day:'numeric', month:'long', year:'numeric' }); return trimmed; } return String(value); }
+
+    function parseInspectionDate(raw){
+      const value = String(raw || '').trim();
+      if(!value) return null;
+      const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+      if(!m) return null;
+      const day = Number(m[1]);
+      const month = Number(m[2]);
+      const year = Number(m[3]);
+      const hour = Number(m[4] || 0);
+      const minute = Number(m[5] || 0);
+      const second = Number(m[6] || 0);
+      const date = new Date(year, month - 1, day, hour, minute, second);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function inspectionThresholdDate(){
+      const today = new Date();
+      return new Date(today.getFullYear() - 3, today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    }
+
+    function isInspectionStale(raw){
+      const parsed = parseInspectionDate(raw);
+      if(!parsed) return false;
+      return parsed < inspectionThresholdDate();
+    }
+
+    function inspectionAlertSubtext(raw){
+      return isInspectionStale(raw) ? 'More than 3 years old from today' : '';
+    }
+
+    function getRegistryExtra(mooringCode){ return registryByCode.get(normalizeCode(mooringCode)) || null; }
+    function effectiveBoatName(record){ const extra = getRegistryExtra(record.mooringCode); return extra?.boat_vessel_name || record.boatName || '-'; }
+    function effectiveInspectionDate(record){ const extra = getRegistryExtra(record.mooringCode); return extra?.last_inspection_date || '-'; }
+    function isRecordInspectionStale(record){ const extra = getRegistryExtra(record.mooringCode); return isInspectionStale(extra?.last_inspection_date); }
+    function inspectionTextHtml(raw){
+      const display = escapeHtml(raw || '-');
+      return isInspectionStale(raw) ? `<span class="alert-text">${display}</span>` : display;
+    }
+
+    function resetCustomerModalState(){
+      el('customerCodeError').classList.add('hidden');
+      el('customerAccessCodeInput').value = '';
+      el('customerGateView').classList.remove('hidden');
+      el('customerLoadingView').classList.add('hidden');
+      el('customerDetailsView').classList.add('hidden');
+      el('customerDetailsEmpty').classList.add('hidden');
+      el('customerDetailsGrid').innerHTML = '';
+    }
+    function openCustomerModal(){
+      const rec = selectedRecord();
+      if(!rec){ return; }
+      el('customerModalBackdrop').classList.remove('hidden');
+      if(customerAccessGranted){
+        showCustomerDetailsForRecord(rec);
+      } else {
+        resetCustomerModalState();
+        el('customerAccessCodeInput').focus();
+      }
+    }
+    function closeCustomerModal(){ el('customerModalBackdrop').classList.add('hidden'); }
+    function lockCustomerModal(){ customerAccessGranted = false; resetCustomerModalState(); }
+
+    async function fetchCustomerDetailsByCode(mooringCode){
+      const key = normalizeCode(mooringCode);
+      if(!key) return null;
+      if(customerDetailsCache.has(key)) return customerDetailsCache.get(key);
+      if(!supabaseClient) return null;
+      const { data, error } = await supabaseClient
+        .from(SUPABASE_CUSTOMER_TABLE)
+        .select('mooring_code, customer_name, customer_email, customer_phone_mob')
+        .eq('mooring_code', key)
+        .limit(1)
+        .maybeSingle();
+      if(error){ console.error('Customer details load failed:', error); throw error; }
+      customerDetailsCache.set(key, data || null);
+      return data || null;
+    }
+
+    async function showCustomerDetailsForRecord(rec){
+      resetCustomerModalState();
+      el('customerGateView').classList.add('hidden');
+      el('customerLoadingView').classList.remove('hidden');
+      try {
+        const row = await fetchCustomerDetailsByCode(rec.mooringCode);
+        el('customerLoadingView').classList.add('hidden');
+        el('customerDetailsView').classList.remove('hidden');
+        if(!row){ el('customerDetailsEmpty').classList.remove('hidden'); return; }
+        const items = [ ['Customer Name', row.customer_name || '-'], ['Customer Email', row.customer_email || '-'], ['Customer Phone', row.customer_phone_mob || '-'] ];
+        el('customerDetailsGrid').innerHTML = items.map(([k,v]) => `<div class="customer-item"><div class="customer-key">${escapeHtml(k)}</div><div class="customer-val">${escapeHtml(v)}</div></div>`).join('');
+      } catch (err){
+        el('customerLoadingView').classList.add('hidden');
+        el('customerDetailsView').classList.remove('hidden');
+        el('customerDetailsEmpty').classList.remove('hidden');
+        el('customerDetailsEmpty').textContent = 'Customer details could not be loaded. Check Supabase URL, anon key, customer table name, and SELECT policy.';
+      }
+    }
+
+    function normalizeFeature(feature){
+      const p = feature.properties || {};
+      const coords = feature.geometry?.coordinates || [];
+      const lat = typeof coords[1]==='number' ? coords[1] : null;
+      const lon = typeof coords[0]==='number' ? coords[0] : null;
+      return {
+        id: p.OBJECTID || p.objectid || p.M_CODE || `row-${Math.random().toString(36).slice(2,8)}`,
+        mooringCode: p.M_CODE || '',
+        mooringLength: p.M_LENGTH ?? '',
+        mooringDepth: p.M_DEPTH ?? '',
+        tagNumber: p.M_TAGNUM || '',
+        boatName: p.B_BOATNAME || '',
+        zoneName: p.MMA_NAME || p.ZONE_NAME || '',
+        lat, lon,
+        latDmm: lat!==null ? formatDMM(lat,'lat') : '-',
+        lonDmm: lon!==null ? formatDMM(lon,'lon') : '-',
+        raw: p
+      };
+    }
+
+    async function loadRegistryData(){
+      registryByCode.clear();
+      if(!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY'){
+        showError('Supabase URL and anon key placeholders are still in this file. Fill them in to load joined registry data. The map can still load from ArcGIS.');
+        state.registryLoaded = 0;
+        return;
+      }
+      try {
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const pageSize = 1000;
+        let from = 0;
+        let loaded = 0;
+        while(true){
+          const { data, error } = await supabaseClient
+            .from(SUPABASE_PUBLIC_TABLE)
+            .select('mooring_code, boat_vessel_name, last_inspection_date, mooring_latitude, mooring_longitude')
+            .range(from, from + pageSize - 1);
+          if(error) throw error;
+          if(!data || !data.length) break;
+          data.forEach((row) => {
+            if(row.mooring_code){
+              registryByCode.set(normalizeCode(row.mooring_code), row);
+              loaded += 1;
+            }
+          });
+          if(data.length < pageSize) break;
+          from += pageSize;
+        }
+        state.registryLoaded = loaded;
+      } catch(err){
+        console.error(err);
+        showError('Supabase registry data failed to load. Check the project URL, anon key, public table name, and SELECT policy.');
+        state.registryLoaded = 0;
+      }
+    }
+
+    async function loadLiveData(){
+      try{
+        const response = await fetch(SERVICE_URL,{mode:'cors'});
+        if(!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const rows = (data.features || []).map(normalizeFeature).filter(r => r.lat !== null && r.lon !== null);
+        state.records = rows;
+        state.selectedId = rows[0]?.id || null;
+        state.fetchedAt = new Date();
+        renderAll(true,true,false);
+      } catch(err){
+        console.error(err);
+        showError('Unable to load the live mooring dataset right now. If this is for production use, consider proxying the ArcGIS service through your own backend.');
+        state.records=[]; state.filtered=[]; state.selectedId=null; renderAll(true,true,false);
+      }
+    }
+
+    async function loadAllData(){
+      showError('');
+      await loadRegistryData();
+      await loadLiveData();
+    }
+
+    function currentFilters(){
+      return { mooringCode: el('f_mooringCode').value.trim().toLowerCase(), boatName: el('f_boatName').value.trim().toLowerCase() };
+    }
+
+    function applyFilters(){
+      const f = currentFilters();
+      state.filtered = state.records.filter((r)=>{
+        const mergedBoatName = effectiveBoatName(r);
+        if(state.overdueOnly && !isRecordInspectionStale(r)) return false;
+        if(f.mooringCode && !String(r.mooringCode).toLowerCase().includes(f.mooringCode)) return false;
+        if(f.boatName && !String(mergedBoatName).toLowerCase().includes(f.boatName)) return false;
+        return true;
+      });
+      if(!state.filtered.some(r => r.id === state.selectedId)) state.selectedId = state.filtered[0]?.id || null;
+    }
+
+    function selectedRecord(){ return state.filtered.find(r => r.id === state.selectedId) || null; }
+
+    function renderStats(){
+      const overdueCount = state.records.filter(r => isRecordInspectionStale(r)).length;
+      el('statFiltered').textContent = state.filtered.length;
+      el('statMapped').textContent = state.filtered.length;
+      el('statOverdueInspection').textContent = overdueCount;
+      const btn = el('overdueOnlyBtn');
+      if(btn){
+        btn.textContent = state.overdueOnly ? 'Show All Pins' : 'Show Only Overdue';
+        btn.classList.toggle('primary', state.overdueOnly);
+        btn.classList.toggle('ghost', !state.overdueOnly);
+      }
+    }
+
+    function popupHtml(r){
+      const extra = getRegistryExtra(r.mooringCode);
+      return `<div style="font-family:ui-sans-serif,-apple-system,Segoe UI,sans-serif;min-width:240px;">
+        <div style="font-size:15px;font-weight:700;color:#0f172a;">${escapeHtml(r.mooringCode || 'No Code')}</div>
+        <div style="margin-top:6px;color:#334155;"><strong>Boat:</strong> ${escapeHtml(extra?.boat_vessel_name || r.boatName || '-')}</div>
+        <div style="margin-top:4px;color:#334155;"><strong>Length:</strong> ${escapeHtml(r.mooringLength || '-')} m</div>
+        <div style="margin-top:4px;color:#334155;"><strong>Last Inspection:</strong> ${inspectionTextHtml(extra?.last_inspection_date || '-')}</div>
+        <div style="margin-top:8px;color:#334155;"><strong>Lat:</strong> ${typeof r.lat==='number' ? r.lat.toFixed(7) : '-'}<br/><span style="color:#64748b;">${escapeHtml(r.latDmm)}</span></div>
+        <div style="margin-top:4px;color:#334155;"><strong>Lon:</strong> ${typeof r.lon==='number' ? r.lon.toFixed(7) : '-'}<br/><span style="color:#64748b;">${escapeHtml(r.lonDmm)}</span></div>
+      </div>`;
+    }
+
+    function focusSelectedMarker(openPopup=true){
+      const rec = selectedRecord();
+      if(!rec || !state.markers[rec.id]) return;
+      const marker = state.markers[rec.id];
+      map.setView([rec.lat, rec.lon], Math.max(map.getZoom(), SEARCH_FOCUS_ZOOM), { animate: true });
+      if(openPopup) marker.openPopup();
+    }
+
+    function markerFillColor(record){
+      return isRecordInspectionStale(record) ? '#dc2626' : '#16a34a';
+    }
+
+    function renderMap(resetBounds=false){
+      if(state.layerGroup) map.removeLayer(state.layerGroup);
+      state.markers={};
+      state.layerGroup=L.layerGroup();
+      const bounds=[];
+      state.filtered.forEach((r)=>{
+        const marker=L.circleMarker([r.lat,r.lon],{ radius: state.selectedId===r.id?7:5, color:'#ffffff', weight:1.5, fillColor:markerFillColor(r), fillOpacity:.95 });
+        marker.bindPopup(popupHtml(r));
+        marker.on('click',()=>{ state.selectedId=r.id; renderAll(false,false,false); });
+        state.markers[r.id]=marker;
+        state.layerGroup.addLayer(marker);
+        bounds.push([r.lat,r.lon]);
+      });
+      state.layerGroup.addTo(map);
+      if(bounds.length && resetBounds) map.fitBounds(bounds,{padding:[24,24]});
+      const selected=selectedRecord();
+      if(selected && state.markers[selected.id]) state.markers[selected.id].setStyle({ radius:7, weight:2, color:'#0f172a', fillColor:markerFillColor(selected) });
+      renderLegend();
+    }
+
+    function renderLegend(){
+      const hasVisible = state.filtered.length > 0;
+      if(!hasVisible){
+        el('legend').innerHTML = '<div class="muted-box" style="grid-column:1/-1;">No mooring pins are currently visible.</div>';
+        return;
+      }
+      el('legend').innerHTML = `
+        <div class="legend-item"><span class="legend-dot" style="background:${CURRENT_PIN_COLOR}"></span><span>Inspection within 3 years</span></div>
+        <div class="legend-item"><span class="legend-dot" style="background:${STALE_PIN_COLOR}"></span><span>Inspection older than 3 years</span></div>`;
+    }
+
+    function renderTable(){
+      const tbody = el('tableBody');
+      if(!state.filtered.length){
+        tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#64748b;padding:40px 16px;">No mooring rows are currently visible.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = state.filtered.map(r=>{
+        const active = state.selectedId===r.id ? 'active' : '';
+        const mergedBoatName = effectiveBoatName(r);
+        const mergedInspectionDate = effectiveInspectionDate(r);
+        const stale = isInspectionStale(mergedInspectionDate);
+        return `<tr class="${active}" data-id="${escapeHtml(r.id)}">
+          <td><strong>${escapeHtml(r.mooringCode || '-')}</strong></td>
+          <td>${escapeHtml(mergedBoatName || '-')}</td>
+          <td>${escapeHtml(r.mooringLength || '-')}</td>
+          <td>${stale ? `<span class="alert-text">${escapeHtml(mergedInspectionDate || '-')}</span>` : escapeHtml(mergedInspectionDate || '-')}</td>
+          <td>${typeof r.lat==='number' ? r.lat.toFixed(7) : '-'}</td>
+          <td>${typeof r.lon==='number' ? r.lon.toFixed(7) : '-'}</td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click',()=>{ state.selectedId=tr.dataset.id; renderAll(false,false,true); }));
+    }
+
+    function renderDetail(){
+      const rec=selectedRecord();
+      const empty=el('detailEmpty');
+      const content=el('detailContent');
+      if(!rec){ empty.classList.remove('hidden'); content.classList.add('hidden'); return; }
+      const extra = getRegistryExtra(rec.mooringCode);
+      const inspectionDate = extra?.last_inspection_date || '-';
+      const inspectionStale = isInspectionStale(inspectionDate);
+      empty.classList.add('hidden');
+      content.classList.remove('hidden');
+      el('detailBadges').innerHTML = [`<span class="badge">${escapeHtml(rec.mooringCode || 'No Code')}</span>`, inspectionStale ? `<span class="badge alert">Inspection overdue</span>` : ''].join('');
+      el('detailTitle').textContent = extra?.boat_vessel_name || rec.boatName || 'No vessel name recorded';
+      el('detailStatus').textContent = 'Live mooring record joined with Supabase registry data';
+      const detailItems = [
+        ['Mooring Code', rec.mooringCode || '-', ''],
+        ['Boat Name', extra?.boat_vessel_name || rec.boatName || '-', extra ? 'From Supabase join' : 'Fallback to public ArcGIS field'],
+        ['Mooring Length', rec.mooringLength || '-', 'meters'],
+        ['Last Inspection Date', inspectionDate || '-', inspectionStale ? 'More than 3 years old from today' : (extra ? 'From Supabase join' : 'No inspection row found in Supabase'), inspectionStale],
+        ['Latitude', typeof rec.lat==='number' ? rec.lat.toFixed(7) : '-', rec.latDmm],
+        ['Longitude', typeof rec.lon==='number' ? rec.lon.toFixed(7) : '-', rec.lonDmm]
+      ];
+      el('detailGrid').innerHTML = detailItems.map((item) => {
+        const [k,v,sub,isAlert] = item;
+        return `<div class="detail-item"><div class="detail-key">${escapeHtml(k)}</div><div class="detail-val ${isAlert ? 'alert-text' : ''}">${escapeHtml(v)}</div>${sub ? `<div class="detail-sub ${isAlert ? 'alert-note' : ''}">${escapeHtml(sub)}</div>` : ''}</div>`;
+      }).join('');
+      if(state.markers[rec.id]){
+        Object.entries(state.markers).forEach(([id,marker])=>{
+          const record = state.filtered.find(r => String(r.id)===String(id));
+          marker.setStyle({ radius: rec.id===id?7:5, color: rec.id===id?'#0f172a':'#ffffff', weight: rec.id===id?2:1.5, fillColor: markerFillColor(record), fillOpacity:.95 });
+        });
+      }
+    }
+
+    function renderAll(reapplyFilters=true, resetBounds=false, autoFocus=false){
+      if(reapplyFilters) applyFilters();
+      renderStats();
+      renderMap(resetBounds);
+      renderTable();
+      renderDetail();
+      if(autoFocus && state.filtered.length) focusSelectedMarker(true);
+    }
+
+    function toggleOverdueOnly(){ state.overdueOnly = !state.overdueOnly; renderAll(true,false,false); }
+    function resetFilters(){ ['f_mooringCode','f_boatName'].forEach(id => el(id).value=''); state.overdueOnly = false; renderAll(true,false,false); }
+    function fitAllPins(){ if(!state.filtered.length) return; map.fitBounds(state.filtered.map(r => [r.lat,r.lon]), { padding:[24,24] }); }
+
+    function initEvents(){
+      el('f_mooringCode').addEventListener('input',()=>renderAll(true,false,true));
+      el('f_boatName').addEventListener('input',()=>renderAll(true,false,true));
+      el('reloadBtn').addEventListener('click',loadAllData);
+      el('resetFiltersBtn').addEventListener('click',resetFilters);
+      el('fitAllBtn').addEventListener('click',fitAllPins);
+      el('overdueOnlyBtn').addEventListener('click',toggleOverdueOnly);
+      el('customerDetailsBtn').addEventListener('click',openCustomerModal);
+      el('customerModalClose').addEventListener('click',closeCustomerModal);
+      el('customerUnlockBtn').addEventListener('click', async () => {
+        const inputCode = el('customerAccessCodeInput').value.trim();
+        if(inputCode !== CUSTOMER_ACCESS_CODE){ el('customerCodeError').classList.remove('hidden'); return; }
+        customerAccessGranted = true;
+        const rec = selectedRecord();
+        if(rec) await showCustomerDetailsForRecord(rec);
+      });
+      el('customerLockBtn').addEventListener('click',() => { lockCustomerModal(); });
+      el('customerAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('customerUnlockBtn').click(); } });
+      el('customerModalBackdrop').addEventListener('click', (event) => { if(event.target === el('customerModalBackdrop')) closeCustomerModal(); });
+      window.addEventListener('keydown', (event) => { if(event.key === 'Escape' && !el('customerModalBackdrop').classList.contains('hidden')) closeCustomerModal(); });
+    }
+
+    initEvents();
+    loadAllData();
+  </script>
+</body>
+</html>
