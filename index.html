@@ -151,7 +151,7 @@
                   <tr>
                     <th>Mooring Code</th>
                     <th>Boat Name</th>
-                    <th>Mooring Length</th>
+                    <th>Licence Length Max</th>
                     <th>Last Inspection</th>
                     <th>Latitude</th>
                     <th>Longitude</th>
@@ -567,7 +567,7 @@
       const detailItems = [
         ['Mooring Code', rec.mooringCode || '-', ''],
         ['Boat Name', extra?.boat_vessel_name || rec.boatName || '-', extra ? '' : 'Fallback to public ArcGIS field'],
-        ['Mooring Length', rec.mooringLength || '-', 'meters'],
+        ['Licence Length Max', rec.mooringLength || '-', 'meters'],
         ['Last Inspection Date', inspectionDate || '-', inspectionStale ? 'More than 3 years old from today' : (extra ? '' : 'No inspection row found in Supabase'), inspectionStale],
         ['Latitude', typeof rec.lat==='number' ? rec.lat.toFixed(7) : '-', rec.latDmm],
         ['Longitude', typeof rec.lon==='number' ? rec.lon.toFixed(7) : '-', rec.lonDmm]
