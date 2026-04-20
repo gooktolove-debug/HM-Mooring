@@ -563,7 +563,7 @@
       content.classList.remove('hidden');
       el('detailBadges').innerHTML = [`<span class="badge">${escapeHtml(rec.mooringCode || 'No Code')}</span>`, inspectionStale ? `<span class="badge alert">Inspection overdue</span>` : ''].join('');
       el('detailTitle').textContent = extra?.boat_vessel_name || rec.boatName || 'No vessel name recorded';
-      el('detailStatus').textContent = 'Live mooring record joined with Supabase registry data';
+      el('detailStatus').textContent = '';
       const detailItems = [
         ['Mooring Code', rec.mooringCode || '-', ''],
         ['Boat Name', extra?.boat_vessel_name || rec.boatName || '-', extra ? '' : 'Fallback to public ArcGIS field'],
