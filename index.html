@@ -128,7 +128,7 @@
     </div>
 
     <div class="card">
-      <div class="panel-head"><h2 class="panel-title">Live Filters</h2><div class="panel-desc">Typing a Mooring Code or Boat Name updates the detail panel and automatically moves the map to the selected marker. Boat Name search uses Supabase data first, then falls back to the public ArcGIS field.</div></div>
+      <div class="panel-head"><h2 class="panel-title">Live Filters</h2><div class="panel-desc"></div></div>
       <div class="panel-body">
         <div class="filters-grid">
           <input id="f_mooringCode" class="field" placeholder="Mooring Code" />
@@ -141,7 +141,7 @@
     <div class="main-grid" style="margin-top:20px;">
       <div>
         <div class="card">
-          <div class="panel-head"><h2 class="panel-title">Leaflet Map</h2><div class="panel-desc">Live public mooring points are loaded from Auckland Transport's public ArcGIS layer. Extra fields such as boat name and inspection date are joined from Supabase using mooring_code. Inspection dates older than 3 years are shown as red alert pins; all other pins are green. Use the overdue button above to filter the map to only the red pins.</div></div>
+          <div class="panel-head"><h2 class="panel-title">Leaflet Map</h2><div class="panel-desc"></div></div>
           <div class="panel-body">
             <div id="map"></div>
             <div class="legend" id="legend"></div>
@@ -165,7 +165,7 @@
       </div>
       <div>
         <div class="card detail-card">
-          <div class="panel-head"><h2 class="panel-title">Detail Information</h2><div class="panel-desc">Detailed information for the selected mooring point. Boat and inspection fields come from Supabase when a mooring_code match is found.</div></div>
+          <div class="panel-head"><h2 class="panel-title">Detail Information</h2><div class="panel-desc"></div></div>
           <div class="panel-body">
             <div id="detailEmpty" class="muted-box">Select a pin or a table row to view the mooring details.</div>
             <div id="detailContent" class="hidden">
