@@ -159,7 +159,7 @@
       
         </div>
         <h1>Internal Mooring App </h1>
-        <div class="subtitle">Active moorings only — Supabase table mooring_registry_import_stg is used, and records with only terminated permit rows are excluded.</div>
+        <div class="subtitle"></div>
       </div>
       <div class="actions">
         <button class="primary" id="reloadBtn">Reload Live Moorings</button>
@@ -171,7 +171,7 @@
     <div class="stats">
       <div class="card stat-card"><div class="stat-top"><div class="icon-box">🔎</div><div><div class="stat-label">Filtered Results</div><div class="stat-value" id="statFiltered">0</div><div class="stat-sub">Current filter result count</div></div></div></div>
       <div class="card stat-card"><div class="stat-top"><div class="icon-box">📍</div><div><div class="stat-label">Mapped Pins</div><div class="stat-value" id="statMapped">0</div><div class="stat-sub">Visible pins on the map</div></div></div></div>
-      <div class="card stat-card"><div class="stat-top"><div class="icon-box">🚨</div><div><div class="stat-label">Inspection Over 3 Years</div><div class="stat-value" id="statOverdueInspection">0</div><div class="stat-sub">Active moorings with overdue inspections</div></div></div><div class="detail-toolbar" style="margin-top:14px;"><button id="overdueOnlyBtn" class="small ghost" type="button">Show Only Overdue</button></div></div>
+      <div class="card stat-card"><div class="stat-top"><div class="icon-box">🚨</div><div><div class="stat-label">Inspection Over 3 Years</div><div class="stat-value" id="statOverdueInspection">0</div><div class="stat-sub">Moorings with overdue inspections</div></div></div><div class="detail-toolbar" style="margin-top:14px;"><button id="overdueOnlyBtn" class="small ghost" type="button">Show Only Overdue</button></div></div>
     </div>
 
     <div class="card">
@@ -344,7 +344,7 @@
     // =========================
     const SUPABASE_URL = 'https://hjrcnsuzrztaiwnttxnr.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_8vscwHQ7y50eUj-RywvmLQ_JGpSp2HE';
-    const SUPABASE_PUBLIC_TABLE = 'mooring_registry_import_stg';
+    const SUPABASE_PUBLIC_TABLE = 'mooring_registry_join_public_latest';
     const SUPABASE_CUSTOMER_TABLE = 'mooring_registry_join_current';
 
     // Customer details gate
@@ -399,11 +399,6 @@
     }
 
     function getRegistryExtra(mooringCode){ return registryByCode.get(normalizeCode(mooringCode)) || null; }
-    function isTerminated(mooringCode){
-      const row = getRegistryExtra(mooringCode);
-      // If a mooring code exists in import_stg but its preferred row is not active, treat it as terminated.
-      return !!(row && row.__is_active_permit === false);
-    }
     function effectiveBoatName(record){ const extra = getRegistryExtra(record.mooringCode); return extra?.boat_vessel_name || record.boatName || '-'; }
     function effectiveInspectionDate(record){ const extra = getRegistryExtra(record.mooringCode); return extra?.last_inspection_date || '-'; }
     function isRecordInspectionStale(record){ const extra = getRegistryExtra(record.mooringCode); return isInspectionStale(extra?.last_inspection_date); }
@@ -607,38 +602,27 @@
         while(true){
           const { data, error } = await supabaseClient
             .from(SUPABASE_PUBLIC_TABLE)
-            .select('mooring_code, boat_vessel_name, last_inspection_date, mooring_permit_date_of_issue, mooring_permit_date_of_termination')
+            .select('mooring_code, boat_vessel_name, last_inspection_date, mooring_latitude, mooring_longitude')
             .range(from, from + pageSize - 1);
           if(error) throw error;
           if(!data || !data.length) break;
-
           data.forEach((row) => {
-            const key = normalizeCode(row.mooring_code);
-            if(!key) return;
-
-            const termination = row.mooring_permit_date_of_termination;
-            const isActivePermit = termination === null || termination === undefined || String(termination).trim() === '';
-            const normalizedRow = { ...row, __is_active_permit: isActivePermit };
-            const existing = registryByCode.get(key);
-
-            // import_stg has history/duplicate rows. Prefer an active permit row over terminated rows.
-            // If multiple active rows exist, keep the later-loaded active row so recent import order can win.
-            if(!existing || (isActivePermit && !existing.__is_active_permit) || (isActivePermit && existing.__is_active_permit)){
-              registryByCode.set(key, normalizedRow);
+            if(row.mooring_code){
+              registryByCode.set(normalizeCode(row.mooring_code), row);
+              loaded += 1;
             }
-            loaded += 1;
           });
-
           if(data.length < pageSize) break;
           from += pageSize;
         }
         state.registryLoaded = loaded;
       } catch(err){
         console.error(err);
-        showError('Supabase registry data failed to load. Check table name, SELECT policy, and these columns: mooring_code, boat_vessel_name, last_inspection_date, mooring_permit_date_of_issue, mooring_permit_date_of_termination.');
+        showError('Supabase registry data failed to load. Check the project URL, anon key, public table name, and SELECT policy.');
         state.registryLoaded = 0;
       }
     }
+
     async function loadLiveData(){
       try{
         const response = await fetch(SERVICE_URL,{mode:'cors'});
@@ -670,7 +654,6 @@
       const f = currentFilters();
       state.filtered = state.records.filter((r)=>{
         const mergedBoatName = effectiveBoatName(r);
-        if(isTerminated(r.mooringCode)) return false;
         if(state.overdueOnly && !isRecordInspectionStale(r)) return false;
         if(f.mooringCode && !String(r.mooringCode).toLowerCase().includes(f.mooringCode)) return false;
         if(f.boatName && !String(mergedBoatName).toLowerCase().includes(f.boatName)) return false;
@@ -682,7 +665,7 @@
     function selectedRecord(){ return state.filtered.find(r => r.id === state.selectedId) || null; }
 
     function renderStats(){
-      const overdueCount = state.records.filter(r => !isTerminated(r.mooringCode) && isRecordInspectionStale(r)).length;
+      const overdueCount = state.records.filter(r => isRecordInspectionStale(r)).length;
       el('statFiltered').textContent = state.filtered.length;
       el('statMapped').textContent = state.filtered.length;
       el('statOverdueInspection').textContent = overdueCount;
