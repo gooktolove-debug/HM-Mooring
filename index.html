@@ -16,6 +16,7 @@
     .badge.secondary{background:#eef2ff;color:#3730a3;border-color:#c7d2fe}
     .badge.alert{background:#fff1f2;color:var(--danger);border-color:#fecdd3}
     .badge.terminated{background:var(--terminated-soft);color:var(--terminated);border-color:#cbd5e1}
+    .badge.facility{background:#ecfeff;color:#0e7490;border-color:#a5f3fc}
     h1{margin:0;font-size:30px;line-height:1.2}
     .subtitle{margin-top:8px;color:var(--muted);font-size:14px;max-width:1040px}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -62,6 +63,10 @@
     .legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
     .legend-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;font-size:12px;color:var(--muted)}
     .legend-dot{width:12px;height:12px;border-radius:999px;display:inline-block}
+    .legend-x{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;color:#facc15;font-size:18px;font-weight:900;line-height:1;text-shadow:-1px -1px 0 #0f172a,1px -1px 0 #0f172a,-1px 1px 0 #0f172a,1px 1px 0 #0f172a}
+    .terminated-x-icon{background:transparent;border:none}
+    .terminated-x-symbol{width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:#facc15;font-size:24px;font-weight:900;line-height:18px;text-shadow:-1.2px -1.2px 0 #0f172a,1.2px -1.2px 0 #0f172a,-1.2px 1.2px 0 #0f172a,1.2px 1.2px 0 #0f172a;transform:translate(-1px,-1px)}
+    .terminated-x-symbol.selected{font-size:30px;line-height:24px;text-shadow:-1.6px -1.6px 0 #0f172a,1.6px -1.6px 0 #0f172a,-1.6px 1.6px 0 #0f172a,1.6px 1.6px 0 #0f172a,0 0 6px rgba(250,204,21,.75)}
 
     .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:#fff;margin-top:16px}
     table{width:100%;border-collapse:collapse;min-width:900px}
@@ -350,7 +355,7 @@
     const ZONE_COLORS = ['#0ea5e9', '#10b981', '#f97316', '#8b5cf6', '#e11d48', '#14b8a6', '#f59e0b', '#06b6d4', '#64748b'];
     const STALE_PIN_COLOR = '#dc2626';
     const CURRENT_PIN_COLOR = '#16a34a';
-    const TERMINATED_PIN_COLOR = '#64748b';
+    const TERMINATED_PIN_COLOR = '#facc15';
     const USER_LOCATION_COLOR = '#2563eb';
 
     // =========================
@@ -428,6 +433,7 @@
         mooring_length: firstNonEmpty(row.mooring_length, row.MOORING_LENGTH, row.mooringLength, row['Mooring Length']),
         last_inspection_date: firstNonEmpty(row.last_inspection_date, row.LAST_INSPECTION_DATE, row.lastInspectionDate, row['Last Inspection Date']),
         boat_vessel_name: firstNonEmpty(row.boat_vessel_name, row.BOAT_VESSEL_NAME, row.boatName, row['Boat Vessel Name'], row['Vessel Name']),
+        mooring_faclity_type_code: firstNonEmpty(row.mooring_faclity_type_code, row.MOORING_FACLITY_TYPE_CODE, row.mooring_facility_type_code, row.MOORING_FACILITY_TYPE_CODE, row['Mooring Faclity Type Code'], row['Mooring Facility Type Code']),
         mooring_permit_date_of_issue: firstNonEmpty(row.mooring_permit_date_of_issue, row.MOORING_PERMIT_DATE_OF_ISSUE, row['Mooring Permit Date Of Issue']),
         mooring_permit_date_of_termination: firstNonEmpty(row.mooring_permit_date_of_termination, row.MOORING_PERMIT_DATE_OF_TERMINATION, row['Mooring Permit Date Of Termination'])
       };
@@ -435,6 +441,21 @@
     function effectiveBoatName(record){ const extra = getRegistryExtra(record.mooringCode); return extra?.boat_vessel_name || record.boatName || '-'; }
     function effectiveInspectionDate(record){ const extra = getRegistryExtra(record.mooringCode); return extra?.last_inspection_date || '-'; }
     function permitTerminationDate(record){ const extra = getRegistryExtra(record.mooringCode); return extra?.mooring_permit_date_of_termination || ''; }
+    function facilityTypeCode(record){ const extra = getRegistryExtra(record.mooringCode); return String(extra?.mooring_faclity_type_code || '').trim().toUpperCase(); }
+    function facilityTypeLabelFromCode(code){
+      const normalized = String(code || '').trim().toUpperCase();
+      const map = {
+        S: 'Swing',
+        SMF: 'Swing',
+        SMC: 'Swing',
+        SM: 'Swing Mud',
+        P: 'Pile',
+        PP: 'Private Pile',
+        CSM: 'Commercial Swing'
+      };
+      return map[normalized] || '';
+    }
+    function facilityTypeLabel(record){ return facilityTypeLabelFromCode(facilityTypeCode(record)); }
     function hasTerminationDate(value){ const raw = String(value ?? '').trim(); return !!raw && raw.toLowerCase() !== 'null' && raw !== '-'; }
     function isRecordTerminated(record){ return hasTerminationDate(permitTerminationDate(record)); }
     function dateSortValue(raw){ const parsed = parseInspectionDate(raw); return parsed ? parsed.getTime() : 0; }
@@ -766,6 +787,46 @@
       if(isRecordTerminated(record)) return TERMINATED_PIN_COLOR;
       return isRecordInspectionStale(record) ? STALE_PIN_COLOR : CURRENT_PIN_COLOR;
     }
+    function terminatedXIcon(selected=false){
+      return L.divIcon({
+        className: 'terminated-x-icon',
+        html: `<div class="terminated-x-symbol ${selected ? 'selected' : ''}">×</div>`,
+        iconSize: selected ? [24, 24] : [18, 18],
+        iconAnchor: selected ? [12, 12] : [9, 9],
+        popupAnchor: [0, -10]
+      });
+    }
+
+    function createMooringMarker(record){
+      if(isRecordTerminated(record)){
+        return L.marker([record.lat, record.lon], { icon: terminatedXIcon(state.selectedId === record.id) });
+      }
+      return L.circleMarker([record.lat, record.lon], {
+        radius: state.selectedId === record.id ? 7 : 5,
+        color: '#ffffff',
+        weight: 1.5,
+        fillColor: markerFillColor(record),
+        fillOpacity: .95
+      });
+    }
+
+    function updateMarkerSelection(marker, record, selected){
+      if(!marker || !record) return;
+      if(isRecordTerminated(record)){
+        if(marker.setIcon) marker.setIcon(terminatedXIcon(selected));
+        return;
+      }
+      if(marker.setStyle){
+        marker.setStyle({
+          radius: selected ? 7 : 5,
+          color: selected ? '#0f172a' : '#ffffff',
+          weight: selected ? 2 : 1.5,
+          fillColor: markerFillColor(record),
+          fillOpacity: .95
+        });
+      }
+    }
+
 
     function renderMap(resetBounds=false){
       if(state.layerGroup) map.removeLayer(state.layerGroup);
@@ -773,7 +834,7 @@
       state.layerGroup=L.layerGroup();
       const bounds=[];
       state.filtered.forEach((r)=>{
-        const marker=L.circleMarker([r.lat,r.lon],{ radius: state.selectedId===r.id?7:5, color:'#ffffff', weight:1.5, fillColor:markerFillColor(r), fillOpacity:.95 });
+        const marker=createMooringMarker(r);
         marker.bindPopup(popupHtml(r));
         marker.on('click',()=>{ state.selectedId=r.id; renderAll(false,false,false); });
         state.markers[r.id]=marker;
@@ -783,7 +844,7 @@
       state.layerGroup.addTo(map);
       if(bounds.length && resetBounds) map.fitBounds(bounds,{padding:[24,24]});
       const selected=selectedRecord();
-      if(selected && state.markers[selected.id]) state.markers[selected.id].setStyle({ radius:7, weight:2, color:'#0f172a', fillColor:markerFillColor(selected) });
+      if(selected && state.markers[selected.id]) updateMarkerSelection(state.markers[selected.id], selected, true);
       renderLegend();
     }
 
@@ -796,7 +857,7 @@
       el('legend').innerHTML = `
         <div class="legend-item"><span class="legend-dot" style="background:${CURRENT_PIN_COLOR}"></span><span>Inspection within 3 years</span></div>
         <div class="legend-item"><span class="legend-dot" style="background:${STALE_PIN_COLOR}"></span><span>Inspection older than 3 years</span></div>
-        <div class="legend-item"><span class="legend-dot" style="background:${TERMINATED_PIN_COLOR}"></span><span>Terminated permit</span></div>
+        <div class="legend-item"><span class="legend-x">×</span><span>Terminated permit</span></div>
         <div class="legend-item"><span class="legend-dot" style="background:${USER_LOCATION_COLOR}"></span><span>Current location</span></div>`;
     }
 
@@ -833,15 +894,18 @@
       const terminated = isRecordTerminated(rec);
       const terminationDate = permitTerminationDate(rec);
       const inspectionStale = isRecordInspectionStale(rec);
+      const facilityCode = facilityTypeCode(rec);
+      const facilityLabel = facilityTypeLabelFromCode(facilityCode);
+      const facilityBadge = facilityLabel ? `<span class="badge facility" title="Facility type code: ${escapeHtml(facilityCode)}">${escapeHtml(facilityLabel)}</span>` : '';
       const ageBucket = overdueAgeBucket(rec);
       const ageText = ageBucket ? { within2:'Overdue ≤ 2 months', '3to4':'Overdue 3–4 months', '5to11':'Overdue 5–11 months', '12plus':'Overdue 12+ months' }[ageBucket] : '';
       empty.classList.add('hidden'); content.classList.remove('hidden');
-      el('detailBadges').innerHTML = [`<span class="badge">${escapeHtml(rec.mooringCode || 'No Code')}</span>`, terminated ? `<span class="badge terminated">⛔ Terminated</span>` : '', (!terminated && inspectionStale) ? `<span class="badge alert">Inspection overdue</span>` : ''].join('');
+      el('detailBadges').innerHTML = [`<span class="badge">${escapeHtml(rec.mooringCode || 'No Code')}</span>`, facilityBadge, terminated ? `<span class="badge terminated">⛔ Terminated</span>` : '', (!terminated && inspectionStale) ? `<span class="badge alert">Inspection overdue</span>` : ''].join('');
       el('detailTitle').textContent = extra?.boat_vessel_name || rec.boatName || 'No vessel name recorded';
       el('detailStatus').textContent = terminated ? `Permit terminated on ${terminationDate}` : (ageText || '');
-      const detailItems = [ ['Mooring Code', rec.mooringCode || '-', ''], ['Boat Name', extra?.boat_vessel_name || rec.boatName || '-', extra ? '' : 'Fallback to public ArcGIS field'], ['Licence Length Max', extra?.mooring_length || rec.mooringLength || '-', 'meters'], ...(terminated ? [['Permit Status', '⛔ Terminated', `Termination date: ${terminationDate}`, false]] : []), ...(ageText ? [['Overdue Age', ageText, 'Measured from the 3-year inspection due date', false]] : []), ['Last Inspection Date', inspectionDate || '-', inspectionStale ? 'More than 3 years old from today' : (extra ? '' : 'No inspection row found in Supabase'), inspectionStale], ['Latitude', typeof rec.lat==='number' ? rec.lat.toFixed(7) : '-', rec.latDmm], ['Longitude', typeof rec.lon==='number' ? rec.lon.toFixed(7) : '-', rec.lonDmm] ];
+      const detailItems = [ ['Mooring Code', rec.mooringCode || '-', ''], ...(facilityLabel ? [['Facility Type', facilityLabel, facilityCode ? `Code: ${facilityCode}` : '', false]] : []), ['Boat Name', extra?.boat_vessel_name || rec.boatName || '-', extra ? '' : 'Fallback to public ArcGIS field'], ['Licence Length Max', extra?.mooring_length || rec.mooringLength || '-', 'meters'], ...(terminated ? [['Permit Status', '⛔ Terminated', `Termination date: ${terminationDate}`, false]] : []), ...(ageText ? [['Overdue Age', ageText, 'Measured from the 3-year inspection due date', false]] : []), ['Last Inspection Date', inspectionDate || '-', inspectionStale ? 'More than 3 years old from today' : (extra ? '' : 'No inspection row found in Supabase'), inspectionStale], ['Latitude', typeof rec.lat==='number' ? rec.lat.toFixed(7) : '-', rec.latDmm], ['Longitude', typeof rec.lon==='number' ? rec.lon.toFixed(7) : '-', rec.lonDmm] ];
       el('detailGrid').innerHTML = detailItems.map((item) => { const [k,v,sub,isAlert] = item; return `<div class="detail-item"><div class="detail-key">${escapeHtml(k)}</div><div class="detail-val ${isAlert ? 'alert-text' : ''}">${escapeHtml(v)}</div>${sub ? `<div class="detail-sub ${isAlert ? 'alert-note' : ''}">${escapeHtml(sub)}</div>` : ''}</div>`; }).join('');
-      if(state.markers[rec.id]){ Object.entries(state.markers).forEach(([id,marker])=>{ const record = state.filtered.find(r => String(r.id)===String(id)); marker.setStyle({ radius: rec.id===id?7:5, color: rec.id===id?'#0f172a':'#ffffff', weight: rec.id===id?2:1.5, fillColor: markerFillColor(record), fillOpacity:.95 }); }); }
+      if(state.markers[rec.id]){ Object.entries(state.markers).forEach(([id,marker])=>{ const record = state.filtered.find(r => String(r.id)===String(id)); updateMarkerSelection(marker, record, String(rec.id)===String(id)); }); }
     }
     function showCurrentLocation(){
       const btn = el('currentLocationBtn');
