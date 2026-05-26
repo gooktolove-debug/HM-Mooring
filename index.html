@@ -27,7 +27,7 @@
     button.small{padding:8px 12px;font-size:13px;border-radius:12px}
     button.danger{border-color:#fecaca;color:var(--danger);background:#fff1f2}
 
-    .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:20px}
+    .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:20px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
     .stat-card{padding:20px}
     .stat-top{display:flex;align-items:center;gap:12px}
@@ -41,6 +41,12 @@
     .mini-stat-sub{font-size:11px;color:var(--muted);margin-top:3px}
     .overdue-details-toggle{margin-top:14px}
     #overdueDetailsSection.collapsed{display:none}
+    #mappedDetailsSection.collapsed{display:none}
+    .facility-filter-wrap{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+    .facility-filter-title{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px}
+    .facility-filter-chips{display:flex;flex-wrap:wrap;gap:8px}
+    .facility-filter-chips button{padding:7px 10px;font-size:12px;border-radius:999px}
+    .facility-filter-chips button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
     .overdue-filter-wrap{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
     .overdue-filter-title{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px}
     .overdue-filter-chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -187,8 +193,7 @@
     </div>
 
     <div class="stats">
-      <div class="card stat-card"><div class="stat-top"><div class="icon-box">🔎</div><div><div class="stat-label">Filtered Results</div><div class="stat-value" id="statFiltered">0</div><div class="stat-sub">Current filter result count</div></div></div></div>
-      <div class="card stat-card"><div class="stat-top"><div class="icon-box">📍</div><div><div class="stat-label">Mapped Pins</div><div class="stat-value" id="statMapped">0</div><div class="stat-sub">Visible pins on the map</div></div></div></div>
+      <div class="card stat-card"><div class="stat-top"><div class="icon-box">📍</div><div><div class="stat-label">Mapped Pins</div><div class="stat-value" id="statMapped">0</div><div class="stat-sub">Visible pins on the map</div></div></div><button id="toggleMappedDetailsBtn" class="small ghost overdue-details-toggle" type="button">▶ Show Details</button><div id="mappedDetailsSection" class="collapsed"><div class="facility-filter-wrap"><div class="facility-filter-title">Facility Type Filter</div><div class="facility-filter-chips"><button type="button" class="small ghost facility-type-btn" data-facility-type="all">All Facility Types</button><button type="button" class="small ghost facility-type-btn" data-facility-type="swing">Swing</button><button type="button" class="small ghost facility-type-btn" data-facility-type="swing_mud">Swing Mud</button><button type="button" class="small ghost facility-type-btn" data-facility-type="pile">Pile</button><button type="button" class="small ghost facility-type-btn" data-facility-type="private_pile">Private Pile</button><button type="button" class="small ghost facility-type-btn" data-facility-type="commercial_swing">Commercial Swing</button><button type="button" class="small ghost facility-type-btn" data-facility-type="other">Other</button><button type="button" class="small ghost facility-type-btn" data-facility-type="unknown">Unknown</button></div></div></div></div>
       <div class="card stat-card"><div class="stat-top"><div class="icon-box">🚨</div><div><div class="stat-label">Inspection Over 3 Years</div><div class="stat-value" id="statOverdueInspection">0</div><div class="stat-sub">Moorings with overdue inspections</div></div></div><button id="toggleOverdueDetailsBtn" class="small ghost overdue-details-toggle" type="button">▶ Show Details</button><div id="overdueDetailsSection" class="collapsed"><div class="mini-stats"><div><div class="mini-stat-label">Terminated Permits</div><div class="mini-stat-value" id="statTerminatedPermits">0</div><div class="mini-stat-sub"></div></div><div><div class="mini-stat-label"></div></div></div><div class="overdue-filter-wrap"><div class="overdue-filter-title">Overdue Age Filter</div><div class="overdue-filter-chips"><button type="button" class="small ghost overdue-age-btn" data-overdue-age="all">All Overdue</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="within2">≤ 2 months</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="3to4">3–4 months</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="5to11">5–11 months</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="12plus">12+ months</button></div></div><div class="detail-toolbar" style="margin-top:14px;"><button id="overdueOnlyBtn" class="small ghost" type="button">Show Only Overdue</button></div></div></div>
     </div>
 
@@ -369,7 +374,7 @@
 
     // Customer details gate
 
-    const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false, overdueAgeFilter: 'all' };
+    const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false, overdueAgeFilter: 'all', facilityTypeFilter: 'all' };
     const registryByCode = new Map();
     const customerDetailsCache = new Map();
     const historyDetailsCache = new Map();
@@ -456,6 +461,23 @@
       return map[normalized] || '';
     }
     function facilityTypeLabel(record){ return facilityTypeLabelFromCode(facilityTypeCode(record)); }
+    function facilityFilterKey(record){
+      const code = facilityTypeCode(record);
+      if(['S','SMF','SMC'].includes(code)) return 'swing';
+      if(code === 'SM') return 'swing_mud';
+      if(code === 'P') return 'pile';
+      if(code === 'PP') return 'private_pile';
+      if(code === 'CSM') return 'commercial_swing';
+      return code ? 'other' : 'unknown';
+    }
+    function facilityFilterLabel(key){
+      return ({ all:'All Facility Types', swing:'Swing', swing_mud:'Swing Mud', pile:'Pile', private_pile:'Private Pile', commercial_swing:'Commercial Swing', other:'Other', unknown:'Unknown' })[key] || key;
+    }
+    function facilityTypeCounts(records){
+      const counts = { all: records.length, swing: 0, swing_mud: 0, pile: 0, private_pile: 0, commercial_swing: 0, other: 0, unknown: 0 };
+      records.forEach((record) => { const key = facilityFilterKey(record); counts[key] = (counts[key] || 0) + 1; });
+      return counts;
+    }
     function hasTerminationDate(value){ const raw = String(value ?? '').trim(); return !!raw && raw.toLowerCase() !== 'null' && raw !== '-'; }
     function isRecordTerminated(record){ return hasTerminationDate(permitTerminationDate(record)); }
     function dateSortValue(raw){ const parsed = parseInspectionDate(raw); return parsed ? parsed.getTime() : 0; }
@@ -730,6 +752,7 @@
       const f = currentFilters();
       state.filtered = state.records.filter((r)=>{
         const mergedBoatName = effectiveBoatName(r);
+        if(state.facilityTypeFilter && state.facilityTypeFilter !== 'all' && facilityFilterKey(r) !== state.facilityTypeFilter) return false;
         if(state.overdueAgeFilter !== 'all'){
           if(overdueAgeBucket(r) !== state.overdueAgeFilter) return false;
         } else if(state.overdueOnly && !isRecordInspectionStale(r)) {
@@ -747,7 +770,7 @@
       const overdueCount = state.records.filter(r => isRecordInspectionStale(r)).length;
       const terminatedCount = state.records.filter(r => isRecordTerminated(r)).length;
       const ageCounts = overdueAgeCounts(state.records);
-      el('statFiltered').textContent = state.filtered.length;
+      const facilityCounts = facilityTypeCounts(state.records);
       el('statMapped').textContent = state.filtered.length;
       el('statOverdueInspection').textContent = overdueCount;
       const terminatedEl = el('statTerminatedPermits'); if(terminatedEl) terminatedEl.textContent = terminatedCount;
@@ -756,6 +779,14 @@
       document.querySelectorAll('.overdue-age-btn').forEach((btn) => { const key = btn.dataset.overdueAge; btn.textContent = ageLabels[key] || btn.textContent; const active = state.overdueOnly && state.overdueAgeFilter === key; btn.classList.toggle('active', active); btn.classList.toggle('primary', active); btn.classList.toggle('ghost', !active); });
       const btn = el('overdueOnlyBtn');
       if(btn){ btn.textContent = state.overdueOnly ? 'Show All Pins' : 'Show Only Overdue'; btn.classList.toggle('primary', state.overdueOnly); btn.classList.toggle('ghost', !state.overdueOnly); }
+      document.querySelectorAll('.facility-type-btn').forEach((btn) => {
+        const key = btn.dataset.facilityType || 'all';
+        btn.textContent = `${facilityFilterLabel(key)} (${facilityCounts[key] || 0})`;
+        const active = state.facilityTypeFilter === key;
+        btn.classList.toggle('active', active);
+        btn.classList.toggle('primary', active);
+        btn.classList.toggle('ghost', !active);
+      });
     }
     function popupHtml(r){
       const extra = getRegistryExtra(r.mooringCode);
@@ -964,7 +995,9 @@
     function toggleOverdueOnly(){ state.overdueOnly = !state.overdueOnly; if(!state.overdueOnly) state.overdueAgeFilter = 'all'; renderAll(true,false,false); }
     function setOverdueAgeFilter(value){ state.overdueOnly = true; state.overdueAgeFilter = value || 'all'; renderAll(true,false,false); }
     function toggleOverdueDetails(){ const section = el('overdueDetailsSection'); const btn = el('toggleOverdueDetailsBtn'); if(!section || !btn) return; const isCollapsed = section.classList.toggle('collapsed'); btn.textContent = isCollapsed ? '▶ Show Details' : '▼ Hide Details'; }
-    function resetFilters(){ ['f_mooringCode','f_boatName'].forEach(id => el(id).value=''); state.overdueOnly = false; state.overdueAgeFilter = 'all'; renderAll(true,false,false); }
+    function toggleMappedDetails(){ const section = el('mappedDetailsSection'); const btn = el('toggleMappedDetailsBtn'); if(!section || !btn) return; const isCollapsed = section.classList.toggle('collapsed'); btn.textContent = isCollapsed ? '▶ Show Details' : '▼ Hide Details'; }
+    function setFacilityTypeFilter(value){ state.facilityTypeFilter = value || 'all'; renderAll(true,false,false); }
+    function resetFilters(){ ['f_mooringCode','f_boatName'].forEach(id => el(id).value=''); state.overdueOnly = false; state.overdueAgeFilter = 'all'; state.facilityTypeFilter = 'all'; renderAll(true,false,false); }
     function fitAllPins(){ if(!state.filtered.length) return; map.fitBounds(state.filtered.map(r => [r.lat,r.lon]), { padding:[24,24] }); }
 
     function initEvents(){
@@ -976,6 +1009,8 @@
       el('currentLocationBtn').addEventListener('click',showCurrentLocation);
       el('overdueOnlyBtn').addEventListener('click',toggleOverdueOnly);
       el('toggleOverdueDetailsBtn').addEventListener('click',toggleOverdueDetails);
+      el('toggleMappedDetailsBtn').addEventListener('click',toggleMappedDetails);
+      document.querySelectorAll('.facility-type-btn').forEach(btn => btn.addEventListener('click', () => setFacilityTypeFilter(btn.dataset.facilityType || 'all')));
       document.querySelectorAll('.overdue-age-btn').forEach(btn => btn.addEventListener('click', () => setOverdueAgeFilter(btn.dataset.overdueAge || 'all')));
       el('customerDetailsBtn').addEventListener('click',openCustomerModal);
       el('historyBtn').addEventListener('click',openHistoryModal);
