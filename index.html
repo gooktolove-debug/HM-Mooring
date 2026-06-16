@@ -150,6 +150,15 @@
     .sp-link-sub{font-size:12px;color:#3b82f6;margin-top:2px;font-weight:400}
     .sp-no-folder{padding:12px 14px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;font-size:13px;color:var(--muted);text-align:center}
 
+    /* ── Edit Mooring Modal ── */
+    .edit-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .edit-field{width:100%;border:1px solid #cbd5e1;border-radius:14px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;background:#fff}
+    .edit-field:focus{border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.10)}
+    .edit-status{margin-top:12px;padding:10px 12px;border-radius:12px;font-size:13px;border:1px solid var(--line);background:#f8fafc;color:var(--muted)}
+    .edit-status.success{background:#ecfdf5;border-color:#bbf7d0;color:#047857}
+    .edit-status.error{background:#fff1f2;border-color:#fecdd3;color:#be123c}
+    @media (max-width:760px){.edit-form-grid{grid-template-columns:1fr}}
+
     @media (max-width:1200px){
       .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
       .main-grid{grid-template-columns:1fr}
@@ -246,6 +255,7 @@
                 <div class="detail-toolbar">
                   <button class="small ghost" id="customerDetailsBtn">Customer Details</button>
                   <button class="small ghost" id="historyBtn">History</button>
+                  <button class="small primary" id="editDetailsBtn" type="button">Edit</button>
                 </div>
               </div>
               <div id="detailGrid" class="detail-grid"></div>
@@ -350,6 +360,43 @@
     </div>
   </div>
 
+
+  <div id="editAccessModalBackdrop" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="editAccessModalTitle">
+      <div class="modal-head">
+        <h3 id="editAccessModalTitle" class="modal-title">Edit Access Code</h3>
+        <button id="editAccessModalClose" class="small danger" type="button">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted-box">Enter the access code to edit details for the selected mooring.</div>
+        <label class="field-label" for="editAccessCodeInput">Access Code</label>
+        <input id="editAccessCodeInput" class="field" type="password" placeholder="Enter access code" autocomplete="off" />
+        <div id="editAccessCodeError" class="code-error hidden">Incorrect access code. Please try again.</div>
+        <div class="modal-actions"><button id="editAccessUnlockBtn" class="primary" type="button">Unlock Edit</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="editModalBackdrop" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" style="width:min(840px,100%);max-height:min(780px,90vh);">
+      <div class="modal-head">
+        <h3 id="editModalTitle" class="modal-title">Edit Mooring Details</h3>
+        <button id="editModalClose" class="small danger" type="button">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted-box" id="editModalIntro">Update the selected latest mooring registry row below.</div>
+        <form id="editForm" style="margin-top:14px;">
+          <div class="edit-form-grid" id="editFormGrid"></div>
+          <div id="editStatus" class="edit-status hidden"></div>
+          <div class="modal-actions">
+            <button id="editCancelBtn" class="ghost" type="button">Cancel</button>
+            <button id="editSaveBtn" class="primary" type="submit">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -373,13 +420,26 @@
     const SUPABASE_CUSTOMER_TABLE = 'mooring_registry_join_current';
 
     // Customer details gate
-
+    const EDIT_ACCESS_CODE = 'akhmmr';
+    const EDIT_FIELDS = [
+      { key: 'mooring_code', label: 'Mooring Code', required: true },
+      { key: 'mooring_length', label: 'Mooring Length', type: 'number', step: 'any' },
+      { key: 'last_inspection_date', label: 'Last Inspection Date' },
+      { key: 'boat_vessel_name', label: 'Boat / Vessel Name' },
+      { key: 'customer_name', label: 'Customer Name' },
+      { key: 'customer_phone_mob', label: 'Customer Phone Mobile' },
+      { key: 'customer_email', label: 'Customer Email', type: 'email' },
+      { key: 'mooring_permit_date_of_issue', label: 'Mooring Permit Date Of Issue' },
+      { key: 'mooring_permit_date_of_termination', label: 'Mooring Permit Date Of Termination' },
+      { key: 'mooring_faclity_type_code', label: 'Mooring Facility Type Code' }
+    ];
     const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false, overdueAgeFilter: 'all', facilityTypeFilter: 'all' };
     const registryByCode = new Map();
     const customerDetailsCache = new Map();
     const historyDetailsCache = new Map();
     let customerAccessGranted = false;
     let historyAccessGranted = false;
+    let editAccessGranted = false;
     let supabaseClient = null;
     let userLocationMarker = null;
     let userAccuracyCircle = null;
@@ -439,6 +499,9 @@
         last_inspection_date: firstNonEmpty(row.last_inspection_date, row.LAST_INSPECTION_DATE, row.lastInspectionDate, row['Last Inspection Date']),
         boat_vessel_name: firstNonEmpty(row.boat_vessel_name, row.BOAT_VESSEL_NAME, row.boatName, row['Boat Vessel Name'], row['Vessel Name']),
         mooring_faclity_type_code: firstNonEmpty(row.mooring_faclity_type_code, row.MOORING_FACLITY_TYPE_CODE, row.mooring_facility_type_code, row.MOORING_FACILITY_TYPE_CODE, row['Mooring Faclity Type Code'], row['Mooring Facility Type Code']),
+        customer_name: firstNonEmpty(row.customer_name, row.CUSTOMER_NAME, row['Customer Name']),
+        customer_phone_mob: firstNonEmpty(row.customer_phone_mob, row.CUSTOMER_PHONE_MOB, row['Customer Phone Mob'], row['Customer Phone Mobile']),
+        customer_email: firstNonEmpty(row.customer_email, row.CUSTOMER_EMAIL, row['Customer Email']),
         mooring_permit_date_of_issue: firstNonEmpty(row.mooring_permit_date_of_issue, row.MOORING_PERMIT_DATE_OF_ISSUE, row['Mooring Permit Date Of Issue']),
         mooring_permit_date_of_termination: firstNonEmpty(row.mooring_permit_date_of_termination, row.MOORING_PERMIT_DATE_OF_TERMINATION, row['Mooring Permit Date Of Termination'])
       };
@@ -658,6 +721,167 @@
         el('historyDetailsView').classList.remove('hidden');
         el('historyDetailsEmpty').classList.remove('hidden');
         el('historyDetailsEmpty').textContent = 'History could not be loaded. Check the access code, Edge Function, and view.';
+      }
+    }
+
+
+    // ─────────────────────────────────────────────
+    // EDIT MODAL — access gate + Supabase update
+    // Important: update only the selected latest registry row, not all same-code history rows.
+    // The app chooses the displayed row by mooring_permit_date_of_issue, so Save uses the
+    // original mooring_code + original mooring_permit_date_of_issue as the update filter.
+    // ─────────────────────────────────────────────
+    function resetEditAccessModalState(){
+      el('editAccessCodeInput').value = '';
+      el('editAccessCodeError').classList.add('hidden');
+    }
+    function openEditAccessModal(){
+      const rec = selectedRecord();
+      if(!rec) return;
+      if(editAccessGranted){ openEditModal(); return; }
+      resetEditAccessModalState();
+      el('editAccessModalBackdrop').classList.remove('hidden');
+      lockBodyScroll();
+      setTimeout(() => el('editAccessCodeInput')?.focus(), 0);
+    }
+    function closeEditAccessModal(){ el('editAccessModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
+    function unlockEdit(){
+      const code = el('editAccessCodeInput').value.trim();
+      if(code !== EDIT_ACCESS_CODE){
+        el('editAccessCodeError').classList.remove('hidden');
+        el('editAccessCodeInput').focus();
+        return;
+      }
+      editAccessGranted = true;
+      closeEditAccessModal();
+      openEditModal();
+    }
+    function buildEditRowFromRecord(rec){
+      const extra = getRegistryExtra(rec.mooringCode) || {};
+      return {
+        _original_mooring_code: extra.mooring_code || rec.mooringCode || '',
+        _original_issue_date: extra.mooring_permit_date_of_issue || '',
+        mooring_code: extra.mooring_code || rec.mooringCode || '',
+        mooring_length: extra.mooring_length || rec.mooringLength || '',
+        last_inspection_date: extra.last_inspection_date || '',
+        boat_vessel_name: extra.boat_vessel_name || rec.boatName || '',
+        customer_name: extra.customer_name || '',
+        customer_phone_mob: extra.customer_phone_mob || '',
+        customer_email: extra.customer_email || '',
+        mooring_permit_date_of_issue: extra.mooring_permit_date_of_issue || '',
+        mooring_permit_date_of_termination: extra.mooring_permit_date_of_termination || '',
+        mooring_faclity_type_code: extra.mooring_faclity_type_code || extra.mooring_facility_type_code || ''
+      };
+    }
+    function setEditStatus(message='', type=''){
+      const box = el('editStatus');
+      if(!message){ box.textContent=''; box.className='edit-status hidden'; return; }
+      box.textContent = message;
+      box.className = `edit-status ${type || ''}`;
+    }
+    function setEditInputValue(fieldKey, value){
+      const input = el(`edit_${fieldKey}`);
+      if(input && (input.value === '' || fieldKey.startsWith('customer_'))){ input.value = value ?? ''; }
+    }
+    async function hydrateEditCustomerFields(rec){
+      try {
+        setEditStatus('Loading customer details...', '');
+        const row = await fetchCustomerDetailsByCode(rec.mooringCode, EDIT_ACCESS_CODE);
+        if(row){
+          setEditInputValue('customer_name', row.customer_name || '');
+          setEditInputValue('customer_phone_mob', row.customer_phone_mob || '');
+          setEditInputValue('customer_email', row.customer_email || '');
+        }
+        setEditStatus('', '');
+      } catch(err){
+        console.warn('Could not prefill customer fields for edit:', err);
+        setEditStatus('Customer details could not be prefilled. You can still enter them manually.', 'error');
+      }
+    }
+    function openEditModal(){
+      const rec = selectedRecord();
+      if(!rec) return;
+      const row = buildEditRowFromRecord(rec);
+      el('editModalTitle').textContent = `Edit Mooring Details — ${row.mooring_code || rec.mooringCode || ''}`;
+      el('editModalIntro').textContent = row._original_issue_date
+        ? `Editing latest row only. Original issue date filter: ${row._original_issue_date}`
+        : 'Editing selected row only.';
+      el('editFormGrid').innerHTML = EDIT_FIELDS.map((field) => {
+        const value = row[field.key] ?? '';
+        const type = field.type || 'text';
+        const step = field.step ? ` step="${escapeHtml(field.step)}"` : '';
+        const required = field.required ? ' required' : '';
+        return `<div><label class="field-label" for="edit_${escapeHtml(field.key)}">${escapeHtml(field.label)}</label><input class="edit-field" id="edit_${escapeHtml(field.key)}" name="${escapeHtml(field.key)}" type="${escapeHtml(type)}"${step}${required} value="${escapeHtml(value)}" /></div>`;
+      }).join('');
+      setEditStatus('');
+      el('editModalBackdrop').classList.remove('hidden');
+      lockBodyScroll();
+      setTimeout(() => el('edit_mooring_code')?.focus(), 0);
+      hydrateEditCustomerFields(rec);
+    }
+    function closeEditModal(){ el('editModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
+    async function saveEditForm(event){
+      event.preventDefault();
+      const rec = selectedRecord();
+      if(!rec || !supabaseClient){ setEditStatus('Supabase is not ready yet. Please reload live moorings and try again.', 'error'); return; }
+      const originalRow = buildEditRowFromRecord(rec);
+      const originalCodeExact = String(originalRow._original_mooring_code || rec.mooringCode || '').trim();
+      const originalCodeNormalised = normalizeCode(originalCodeExact || rec.mooringCode);
+      const originalIssueDate = String(originalRow._original_issue_date || '').trim();
+      const payload = {};
+      EDIT_FIELDS.forEach((field) => {
+        const input = el(`edit_${field.key}`);
+        let value = input ? input.value.trim() : '';
+        if(field.type === 'number') value = value === '' ? null : Number(value);
+        payload[field.key] = value === '' ? null : value;
+      });
+      if(!payload.mooring_code){ setEditStatus('Mooring Code is required.', 'error'); return; }
+      if(Number.isNaN(payload.mooring_length)){ setEditStatus('Mooring Length must be a valid number.', 'error'); return; }
+      if(!originalIssueDate){ setEditStatus('Cannot safely update: original Mooring Permit Date Of Issue is missing. This value is needed to avoid changing older history rows.', 'error'); return; }
+
+      el('editSaveBtn').disabled = true;
+      el('editSaveBtn').textContent = 'Saving…';
+      setEditStatus('Saving latest row only...', '');
+      try {
+        // CRITICAL: Do not filter by mooring_code only, because one code can have history rows.
+        // Use original issue date as a second key so only the currently displayed/latest row is updated.
+        let result = await supabaseClient
+          .from(SUPABASE_PUBLIC_TABLE)
+          .update(payload)
+          .eq('mooring_code', originalCodeExact || originalCodeNormalised)
+          .eq('mooring_permit_date_of_issue', originalIssueDate);
+        if(result.error) throw result.error;
+
+        if(result.count === 0 && originalCodeNormalised){
+          result = await supabaseClient
+            .from(SUPABASE_PUBLIC_TABLE)
+            .update(payload)
+            .ilike('mooring_code', originalCodeNormalised)
+            .eq('mooring_permit_date_of_issue', originalIssueDate);
+          if(result.error) throw result.error;
+        }
+
+        const updated = normaliseRegistryRow(payload);
+        registryByCode.delete(normalizeCode(originalCodeExact));
+        registryByCode.delete(originalCodeNormalised);
+        registryByCode.set(normalizeCode(updated.mooring_code), updated);
+        rec.mooringCode = updated.mooring_code || rec.mooringCode;
+        rec.mooringLength = updated.mooring_length || rec.mooringLength;
+        rec.boatName = updated.boat_vessel_name || rec.boatName;
+        customerDetailsCache.set(normalizeCode(updated.mooring_code), {
+          customer_name: updated.customer_name || payload.customer_name || '',
+          customer_phone_mob: updated.customer_phone_mob || payload.customer_phone_mob || '',
+          customer_email: updated.customer_email || payload.customer_email || ''
+        });
+        setEditStatus('Saved latest row only. Reload to confirm Supabase persisted the selected row.', 'success');
+        renderAll(true,false,false);
+        setTimeout(closeEditModal, 900);
+      } catch(err){
+        console.error('saveEditForm error:', err);
+        setEditStatus('Failed to save changes: ' + (err.message || err), 'error');
+      } finally {
+        el('editSaveBtn').disabled = false;
+        el('editSaveBtn').textContent = 'Save Changes';
       }
     }
 
@@ -1014,8 +1238,14 @@
       document.querySelectorAll('.overdue-age-btn').forEach(btn => btn.addEventListener('click', () => setOverdueAgeFilter(btn.dataset.overdueAge || 'all')));
       el('customerDetailsBtn').addEventListener('click',openCustomerModal);
       el('historyBtn').addEventListener('click',openHistoryModal);
+      el('editDetailsBtn').addEventListener('click',openEditAccessModal);
       el('customerModalClose').addEventListener('click',closeCustomerModal);
       el('historyModalClose').addEventListener('click',closeHistoryModal);
+      el('editAccessModalClose').addEventListener('click',closeEditAccessModal);
+      el('editAccessUnlockBtn').addEventListener('click',unlockEdit);
+      el('editModalClose').addEventListener('click',closeEditModal);
+      el('editCancelBtn').addEventListener('click',closeEditModal);
+      el('editForm').addEventListener('submit',saveEditForm);
       el('customerUnlockBtn').addEventListener('click', async () => {
         const rec = selectedRecord();
         if (!rec) return;
@@ -1036,11 +1266,16 @@
       el('historyLockBtn').addEventListener('click',() => { lockHistoryModal(); });
       el('customerAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('customerUnlockBtn').click(); } });
       el('historyAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('historyUnlockBtn').click(); } });
+      el('editAccessCodeInput').addEventListener('keydown', (event) => { if(event.key === 'Enter'){ event.preventDefault(); unlockEdit(); } });
       el('customerModalBackdrop').addEventListener('click', (event) => { if(event.target === el('customerModalBackdrop')) closeCustomerModal(); });
       el('historyModalBackdrop').addEventListener('click', (event) => { if(event.target === el('historyModalBackdrop')) closeHistoryModal(); });
+      el('editAccessModalBackdrop').addEventListener('click', (event) => { if(event.target === el('editAccessModalBackdrop')) closeEditAccessModal(); });
+      el('editModalBackdrop').addEventListener('click', (event) => { if(event.target === el('editModalBackdrop')) closeEditModal(); });
       window.addEventListener('keydown', (event) => {
         if(event.key === 'Escape' && !el('customerModalBackdrop').classList.contains('hidden')) closeCustomerModal();
         if(event.key === 'Escape' && !el('historyModalBackdrop').classList.contains('hidden')) closeHistoryModal();
+        if(event.key === 'Escape' && !el('editAccessModalBackdrop').classList.contains('hidden')) closeEditAccessModal();
+        if(event.key === 'Escape' && !el('editModalBackdrop').classList.contains('hidden')) closeEditModal();
       });
     }
 
@@ -1212,6 +1447,7 @@
     }
     window.addEventListener('resize', () => map.invalidateSize());
 
+    document.addEventListener('click', (event) => { if(event.target && event.target.id === 'editDetailsBtn') openEditAccessModal(); });
     initEvents();
 
     // Notes events
