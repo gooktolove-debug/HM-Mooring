@@ -428,6 +428,8 @@
       { key: 'boat_vessel_name', label: 'Boat / Vessel Name' },
       { key: 'customer_name', label: 'Customer Name' },
       { key: 'customer_phone_mob', label: 'Customer Phone Mobile' },
+      { key: 'customer_phoneah', label: 'Customer Phone AH' },
+      { key: 'customer_phonewk', label: 'Customer Phone WK' },
       { key: 'customer_email', label: 'Customer Email', type: 'email' },
       { key: 'mooring_permit_date_of_issue', label: 'Mooring Permit Date Of Issue' },
       { key: 'mooring_permit_date_of_termination', label: 'Mooring Permit Date Of Termination' },
@@ -440,6 +442,7 @@
     let customerAccessGranted = false;
     let historyAccessGranted = false;
     let editAccessGranted = false;
+    let sharedAccessGranted = false;
     let supabaseClient = null;
     let userLocationMarker = null;
     let userAccuracyCircle = null;
@@ -502,6 +505,8 @@
         customer_name: firstNonEmpty(row.customer_name, row.CUSTOMER_NAME, row['Customer Name']),
         customer_phone_mob: firstNonEmpty(row.customer_phone_mob, row.CUSTOMER_PHONE_MOB, row['Customer Phone Mob'], row['Customer Phone Mobile']),
         customer_email: firstNonEmpty(row.customer_email, row.CUSTOMER_EMAIL, row['Customer Email']),
+        customer_phoneah: firstNonEmpty(row.customer_phoneah, row.CUSTOMER_PHONEAH, row['Customer Phone AH'], row['customer_phoneah']),
+        customer_phonewk: firstNonEmpty(row.customer_phonewk, row.CUSTOMER_PHONEWK, row['Customer Phone WK'], row['customer_phonewk']),
         mooring_permit_date_of_issue: firstNonEmpty(row.mooring_permit_date_of_issue, row.MOORING_PERMIT_DATE_OF_ISSUE, row['Mooring Permit Date Of Issue']),
         mooring_permit_date_of_termination: firstNonEmpty(row.mooring_permit_date_of_termination, row.MOORING_PERMIT_DATE_OF_TERMINATION, row['Mooring Permit Date Of Termination'])
       };
@@ -564,6 +569,58 @@
       return isInspectionStale(raw) ? `<span class="alert-text">${display}</span>` : display;
     }
 
+
+    function grantSharedAccess(){
+      sharedAccessGranted = true;
+      customerAccessGranted = true;
+      historyAccessGranted = true;
+      editAccessGranted = true;
+    }
+    function revokeSharedAccess(){
+      sharedAccessGranted = false;
+      customerAccessGranted = false;
+      historyAccessGranted = false;
+      editAccessGranted = false;
+    }
+    function cleanContactValue(value){
+      const raw = String(value ?? '').trim();
+      if(!raw || raw === '-' || raw.toLowerCase() === 'null' || raw.toLowerCase() === 'undefined') return '';
+      return raw;
+    }
+    function otherContactsText(row){
+      const ah = cleanContactValue(row?.customer_phoneah);
+      const wk = cleanContactValue(row?.customer_phonewk);
+      const parts = [];
+      if(ah) parts.push(`AH: ${ah}`);
+      if(wk) parts.push(`WK: ${wk}`);
+      return parts.length ? parts.join(' / ') : '-';
+    }
+    function mergeOtherContactsByIssueDate(row, fallbackRows=[]){
+      if(!row) return row;
+      if(cleanContactValue(row.customer_phoneah) || cleanContactValue(row.customer_phonewk)) return row;
+      const rowIssue = String(row.mooring_permit_date_of_issue || '').trim();
+      const match = (fallbackRows || []).find((candidate) =>
+        String(candidate?.mooring_permit_date_of_issue || '').trim() === rowIssue &&
+        (cleanContactValue(candidate?.customer_phoneah) || cleanContactValue(candidate?.customer_phonewk))
+      );
+      return match ? { ...row, customer_phoneah: match.customer_phoneah, customer_phonewk: match.customer_phonewk } : row;
+    }
+    async function fetchRegistryRowsByCode(mooringCode){
+      const key = normalizeCode(mooringCode);
+      if(!key || !supabaseClient) return [];
+      try {
+        const { data, error } = await supabaseClient
+          .from(SUPABASE_PUBLIC_TABLE)
+          .select('*')
+          .ilike('mooring_code', key);
+        if(error) throw error;
+        return (data || []).map(normaliseRegistryRow);
+      } catch(err){
+        console.warn('fetchRegistryRowsByCode failed:', err);
+        return [];
+      }
+    }
+
     function resetCustomerModalState(){
       el('customerCodeError').classList.add('hidden');
       el('customerAccessCodeInput').value = '';
@@ -578,8 +635,8 @@
       if(!rec){ return; }
       el('customerModalBackdrop').classList.remove('hidden');
       lockBodyScroll();
-      if(customerAccessGranted){
-        showCustomerDetailsForRecord(rec);
+      if(sharedAccessGranted || customerAccessGranted){
+        showCustomerDetailsForRecord(rec, EDIT_ACCESS_CODE);
       } else {
         resetCustomerModalState();
         el('customerAccessCodeInput').focus();
@@ -622,11 +679,25 @@
       el('customerGateView').classList.add('hidden');
       el('customerLoadingView').classList.remove('hidden');
       try {
-        const row = await fetchCustomerDetailsByCode(rec.mooringCode, accessCode);
+        const rowFromFunction = await fetchCustomerDetailsByCode(rec.mooringCode, accessCode || EDIT_ACCESS_CODE);
+        const registryRows = await fetchRegistryRowsByCode(rec.mooringCode);
+        const selectedIssue = String(getRegistryExtra(rec.mooringCode)?.mooring_permit_date_of_issue || '').trim();
+        const registryFallback = registryRows.find((r) => String(r.mooring_permit_date_of_issue || '').trim() === selectedIssue) || registryRows[0] || {};
+        const row = { ...(registryFallback || {}), ...(rowFromFunction || {}) };
+        if(!cleanContactValue(row.customer_phoneah) && !cleanContactValue(row.customer_phonewk)){
+          const merged = mergeOtherContactsByIssueDate(row, registryRows);
+          row.customer_phoneah = merged.customer_phoneah;
+          row.customer_phonewk = merged.customer_phonewk;
+        }
         el('customerLoadingView').classList.add('hidden');
         el('customerDetailsView').classList.remove('hidden');
-        if(!row || (!row.customer_name && !row.customer_email && !row.customer_phone_mob)){ el('customerDetailsEmpty').classList.remove('hidden'); return; }
-        const items = [ ['Customer Name', row.customer_name || '-'], ['Customer Email', row.customer_email || '-'], ['Customer Phone', row.customer_phone_mob || '-'] ];
+        if(!row || (!row.customer_name && !row.customer_email && !row.customer_phone_mob && !row.customer_phoneah && !row.customer_phonewk)){ el('customerDetailsEmpty').classList.remove('hidden'); return; }
+        const items = [
+          ['Customer Name', row.customer_name || '-'],
+          ['Customer Email', row.customer_email || '-'],
+          ['Customer Phone', row.customer_phone_mob || '-'],
+          ['Other contacts', otherContactsText(row)]
+        ];
         el('customerDetailsGrid').innerHTML = items.map(([k,v]) => `<div class="customer-item"><div class="customer-key">${escapeHtml(k)}</div><div class="customer-val">${escapeHtml(v)}</div></div>`).join('');
       } catch (err){
         el('customerLoadingView').classList.add('hidden');
@@ -651,8 +722,8 @@
       if(!rec){ return; }
       el('historyModalBackdrop').classList.remove('hidden');
       lockBodyScroll();
-      if(historyAccessGranted){
-        showHistoryForRecord(rec);
+      if(sharedAccessGranted || historyAccessGranted){
+        showHistoryForRecord(rec, EDIT_ACCESS_CODE);
       } else {
         resetHistoryModalState();
         el('historyAccessCodeInput').focus();
@@ -693,7 +764,9 @@
       el('historyGateView').classList.add('hidden');
       el('historyLoadingView').classList.remove('hidden');
       try {
-        const rows = await fetchHistoryByCode(rec.mooringCode, accessCode);
+        const rowsFromFunction = await fetchHistoryByCode(rec.mooringCode, accessCode || EDIT_ACCESS_CODE);
+        const registryRows = await fetchRegistryRowsByCode(rec.mooringCode);
+        const rows = (rowsFromFunction || []).map((row) => mergeOtherContactsByIssueDate(row, registryRows));
         el('historyLoadingView').classList.add('hidden');
         el('historyDetailsView').classList.remove('hidden');
         if(!rows.length){ el('historyDetailsEmpty').classList.remove('hidden'); return; }
@@ -709,6 +782,8 @@
             <div class="customer-val">${escapeHtml(row.customer_email || '-')}</div>
             <div class="customer-key" style="margin-top:10px;">Customer Phone</div>
             <div class="customer-val">${escapeHtml(row.customer_phone_mob || '-')}</div>
+            <div class="customer-key" style="margin-top:10px;">Other contacts</div>
+            <div class="customer-val">${escapeHtml(otherContactsText(row))}</div>
             <div class="customer-key" style="margin-top:10px;">Permit Date Of Issue</div>
             <div class="customer-val">${escapeHtml(row.mooring_permit_date_of_issue || '-')}</div>
             <div class="customer-key" style="margin-top:10px;">Last Inspection Date</div>
@@ -727,35 +802,11 @@
 
     // ─────────────────────────────────────────────
     // EDIT MODAL — access gate + Supabase update
-    // Important: update only the selected latest registry row, not all same-code history rows.
-    // The app chooses the displayed row by mooring_permit_date_of_issue, so Save uses the
-    // original mooring_code + original mooring_permit_date_of_issue as the update filter.
     // ─────────────────────────────────────────────
-    function resetEditAccessModalState(){
-      el('editAccessCodeInput').value = '';
-      el('editAccessCodeError').classList.add('hidden');
-    }
-    function openEditAccessModal(){
-      const rec = selectedRecord();
-      if(!rec) return;
-      if(editAccessGranted){ openEditModal(); return; }
-      resetEditAccessModalState();
-      el('editAccessModalBackdrop').classList.remove('hidden');
-      lockBodyScroll();
-      setTimeout(() => el('editAccessCodeInput')?.focus(), 0);
-    }
+    function resetEditAccessModalState(){ el('editAccessCodeInput').value = ''; el('editAccessCodeError').classList.add('hidden'); }
+    function openEditAccessModal(){ const rec = selectedRecord(); if(!rec) return; if(sharedAccessGranted || editAccessGranted){ openEditModal(); return; } resetEditAccessModalState(); el('editAccessModalBackdrop').classList.remove('hidden'); lockBodyScroll(); setTimeout(() => el('editAccessCodeInput')?.focus(), 0); }
     function closeEditAccessModal(){ el('editAccessModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
-    function unlockEdit(){
-      const code = el('editAccessCodeInput').value.trim();
-      if(code !== EDIT_ACCESS_CODE){
-        el('editAccessCodeError').classList.remove('hidden');
-        el('editAccessCodeInput').focus();
-        return;
-      }
-      editAccessGranted = true;
-      closeEditAccessModal();
-      openEditModal();
-    }
+    function unlockEdit(){ const code = el('editAccessCodeInput').value.trim(); if(code !== EDIT_ACCESS_CODE){ el('editAccessCodeError').classList.remove('hidden'); el('editAccessCodeInput').focus(); return; } grantSharedAccess(); closeEditAccessModal(); openEditModal(); }
     function buildEditRowFromRecord(rec){
       const extra = getRegistryExtra(rec.mooringCode) || {};
       return {
@@ -767,57 +818,39 @@
         boat_vessel_name: extra.boat_vessel_name || rec.boatName || '',
         customer_name: extra.customer_name || '',
         customer_phone_mob: extra.customer_phone_mob || '',
+        customer_phoneah: extra.customer_phoneah || '',
+        customer_phonewk: extra.customer_phonewk || '',
         customer_email: extra.customer_email || '',
         mooring_permit_date_of_issue: extra.mooring_permit_date_of_issue || '',
         mooring_permit_date_of_termination: extra.mooring_permit_date_of_termination || '',
         mooring_faclity_type_code: extra.mooring_faclity_type_code || extra.mooring_facility_type_code || ''
       };
     }
-    function setEditStatus(message='', type=''){
-      const box = el('editStatus');
-      if(!message){ box.textContent=''; box.className='edit-status hidden'; return; }
-      box.textContent = message;
-      box.className = `edit-status ${type || ''}`;
-    }
-    function setEditInputValue(fieldKey, value){
-      const input = el(`edit_${fieldKey}`);
-      if(input && (input.value === '' || fieldKey.startsWith('customer_'))){ input.value = value ?? ''; }
-    }
+    function setEditStatus(message='', type=''){ const box = el('editStatus'); if(!message){ box.textContent=''; box.className='edit-status hidden'; return; } box.textContent = message; box.className = `edit-status ${type || ''}`; }
+    function setEditInputValue(fieldKey, value){ const input = el(`edit_${fieldKey}`); if(input && (input.value === '' || fieldKey.startsWith('customer_'))){ input.value = value ?? ''; } }
     async function hydrateEditCustomerFields(rec){
       try {
         setEditStatus('Loading customer details...', '');
-        const row = await fetchCustomerDetailsByCode(rec.mooringCode, EDIT_ACCESS_CODE);
-        if(row){
-          setEditInputValue('customer_name', row.customer_name || '');
-          setEditInputValue('customer_phone_mob', row.customer_phone_mob || '');
-          setEditInputValue('customer_email', row.customer_email || '');
-        }
+        const rowFromFunction = await fetchCustomerDetailsByCode(rec.mooringCode, EDIT_ACCESS_CODE);
+        const registryRows = await fetchRegistryRowsByCode(rec.mooringCode);
+        const selectedIssue = String(getRegistryExtra(rec.mooringCode)?.mooring_permit_date_of_issue || '').trim();
+        const registryFallback = registryRows.find((r) => String(r.mooring_permit_date_of_issue || '').trim() === selectedIssue) || registryRows[0] || {};
+        const row = { ...(registryFallback || {}), ...(rowFromFunction || {}) };
+        const merged = mergeOtherContactsByIssueDate(row, registryRows);
+        setEditInputValue('customer_name', merged.customer_name || '');
+        setEditInputValue('customer_phone_mob', merged.customer_phone_mob || '');
+        setEditInputValue('customer_phoneah', merged.customer_phoneah || '');
+        setEditInputValue('customer_phonewk', merged.customer_phonewk || '');
+        setEditInputValue('customer_email', merged.customer_email || '');
         setEditStatus('', '');
-      } catch(err){
-        console.warn('Could not prefill customer fields for edit:', err);
-        setEditStatus('Customer details could not be prefilled. You can still enter them manually.', 'error');
-      }
+      } catch(err){ console.warn('Could not prefill customer fields for edit:', err); setEditStatus('Customer details could not be prefilled. You can still enter them manually.', 'error'); }
     }
     function openEditModal(){
-      const rec = selectedRecord();
-      if(!rec) return;
-      const row = buildEditRowFromRecord(rec);
+      const rec = selectedRecord(); if(!rec) return; const row = buildEditRowFromRecord(rec);
       el('editModalTitle').textContent = `Edit Mooring Details — ${row.mooring_code || rec.mooringCode || ''}`;
-      el('editModalIntro').textContent = row._original_issue_date
-        ? `Editing latest row only. Original issue date filter: ${row._original_issue_date}`
-        : 'Editing selected row only.';
-      el('editFormGrid').innerHTML = EDIT_FIELDS.map((field) => {
-        const value = row[field.key] ?? '';
-        const type = field.type || 'text';
-        const step = field.step ? ` step="${escapeHtml(field.step)}"` : '';
-        const required = field.required ? ' required' : '';
-        return `<div><label class="field-label" for="edit_${escapeHtml(field.key)}">${escapeHtml(field.label)}</label><input class="edit-field" id="edit_${escapeHtml(field.key)}" name="${escapeHtml(field.key)}" type="${escapeHtml(type)}"${step}${required} value="${escapeHtml(value)}" /></div>`;
-      }).join('');
-      setEditStatus('');
-      el('editModalBackdrop').classList.remove('hidden');
-      lockBodyScroll();
-      setTimeout(() => el('edit_mooring_code')?.focus(), 0);
-      hydrateEditCustomerFields(rec);
+      el('editModalIntro').textContent = row._original_issue_date ? `Editing latest row only. Original issue date filter: ${row._original_issue_date}` : 'Editing selected row only.';
+      el('editFormGrid').innerHTML = EDIT_FIELDS.map((field) => { const value = row[field.key] ?? ''; const type = field.type || 'text'; const step = field.step ? ` step="${escapeHtml(field.step)}"` : ''; const required = field.required ? ' required' : ''; return `<div><label class="field-label" for="edit_${escapeHtml(field.key)}">${escapeHtml(field.label)}</label><input class="edit-field" id="edit_${escapeHtml(field.key)}" name="${escapeHtml(field.key)}" type="${escapeHtml(type)}"${step}${required} value="${escapeHtml(value)}" /></div>`; }).join('');
+      setEditStatus(''); el('editModalBackdrop').classList.remove('hidden'); lockBodyScroll(); setTimeout(() => el('edit_mooring_code')?.focus(), 0); hydrateEditCustomerFields(rec);
     }
     function closeEditModal(){ el('editModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
     async function saveEditForm(event){
@@ -829,60 +862,22 @@
       const originalCodeNormalised = normalizeCode(originalCodeExact || rec.mooringCode);
       const originalIssueDate = String(originalRow._original_issue_date || '').trim();
       const payload = {};
-      EDIT_FIELDS.forEach((field) => {
-        const input = el(`edit_${field.key}`);
-        let value = input ? input.value.trim() : '';
-        if(field.type === 'number') value = value === '' ? null : Number(value);
-        payload[field.key] = value === '' ? null : value;
-      });
+      EDIT_FIELDS.forEach((field) => { const input = el(`edit_${field.key}`); let value = input ? input.value.trim() : ''; if(field.type === 'number') value = value === '' ? null : Number(value); payload[field.key] = value === '' ? null : value; });
       if(!payload.mooring_code){ setEditStatus('Mooring Code is required.', 'error'); return; }
       if(Number.isNaN(payload.mooring_length)){ setEditStatus('Mooring Length must be a valid number.', 'error'); return; }
       if(!originalIssueDate){ setEditStatus('Cannot safely update: original Mooring Permit Date Of Issue is missing. This value is needed to avoid changing older history rows.', 'error'); return; }
-
-      el('editSaveBtn').disabled = true;
-      el('editSaveBtn').textContent = 'Saving…';
-      setEditStatus('Saving latest row only...', '');
+      el('editSaveBtn').disabled = true; el('editSaveBtn').textContent = 'Saving…'; setEditStatus('Saving latest row only...', '');
       try {
-        // CRITICAL: Do not filter by mooring_code only, because one code can have history rows.
-        // Use original issue date as a second key so only the currently displayed/latest row is updated.
-        let result = await supabaseClient
-          .from(SUPABASE_PUBLIC_TABLE)
-          .update(payload)
-          .eq('mooring_code', originalCodeExact || originalCodeNormalised)
-          .eq('mooring_permit_date_of_issue', originalIssueDate);
+        let result = await supabaseClient.from(SUPABASE_PUBLIC_TABLE).update(payload).eq('mooring_code', originalCodeExact || originalCodeNormalised).eq('mooring_permit_date_of_issue', originalIssueDate);
         if(result.error) throw result.error;
-
-        if(result.count === 0 && originalCodeNormalised){
-          result = await supabaseClient
-            .from(SUPABASE_PUBLIC_TABLE)
-            .update(payload)
-            .ilike('mooring_code', originalCodeNormalised)
-            .eq('mooring_permit_date_of_issue', originalIssueDate);
-          if(result.error) throw result.error;
-        }
-
+        if(result.count === 0 && originalCodeNormalised){ result = await supabaseClient.from(SUPABASE_PUBLIC_TABLE).update(payload).ilike('mooring_code', originalCodeNormalised).eq('mooring_permit_date_of_issue', originalIssueDate); if(result.error) throw result.error; }
         const updated = normaliseRegistryRow(payload);
-        registryByCode.delete(normalizeCode(originalCodeExact));
-        registryByCode.delete(originalCodeNormalised);
-        registryByCode.set(normalizeCode(updated.mooring_code), updated);
-        rec.mooringCode = updated.mooring_code || rec.mooringCode;
-        rec.mooringLength = updated.mooring_length || rec.mooringLength;
-        rec.boatName = updated.boat_vessel_name || rec.boatName;
-        customerDetailsCache.set(normalizeCode(updated.mooring_code), {
-          customer_name: updated.customer_name || payload.customer_name || '',
-          customer_phone_mob: updated.customer_phone_mob || payload.customer_phone_mob || '',
-          customer_email: updated.customer_email || payload.customer_email || ''
-        });
-        setEditStatus('Saved latest row only. Reload to confirm Supabase persisted the selected row.', 'success');
-        renderAll(true,false,false);
-        setTimeout(closeEditModal, 900);
-      } catch(err){
-        console.error('saveEditForm error:', err);
-        setEditStatus('Failed to save changes: ' + (err.message || err), 'error');
-      } finally {
-        el('editSaveBtn').disabled = false;
-        el('editSaveBtn').textContent = 'Save Changes';
-      }
+        registryByCode.delete(normalizeCode(originalCodeExact)); registryByCode.delete(originalCodeNormalised); registryByCode.set(normalizeCode(updated.mooring_code), updated);
+        rec.mooringCode = updated.mooring_code || rec.mooringCode; rec.mooringLength = updated.mooring_length || rec.mooringLength; rec.boatName = updated.boat_vessel_name || rec.boatName;
+        customerDetailsCache.set(normalizeCode(updated.mooring_code), { customer_name: updated.customer_name || payload.customer_name || '', customer_phone_mob: updated.customer_phone_mob || payload.customer_phone_mob || '', customer_phoneah: updated.customer_phoneah || payload.customer_phoneah || '', customer_phonewk: updated.customer_phonewk || payload.customer_phonewk || '', customer_email: updated.customer_email || payload.customer_email || '' });
+        setEditStatus('Saved latest row only. Reload to confirm Supabase persisted the selected row.', 'success'); renderAll(true,false,false); setTimeout(closeEditModal, 900);
+      } catch(err){ console.error('saveEditForm error:', err); setEditStatus('Failed to save changes: ' + (err.message || err), 'error'); }
+      finally { el('editSaveBtn').disabled = false; el('editSaveBtn').textContent = 'Save Changes'; }
     }
 
     function normalizeFeature(feature){
@@ -1252,7 +1247,12 @@
 
         const inputCode = el('customerAccessCodeInput').value.trim();
         el('customerCodeError').classList.add('hidden');
-        await showCustomerDetailsForRecord(rec, inputCode);
+        if(inputCode !== EDIT_ACCESS_CODE){
+          el('customerCodeError').classList.remove('hidden');
+          return;
+        }
+        grantSharedAccess();
+        await showCustomerDetailsForRecord(rec, EDIT_ACCESS_CODE);
       });
       el('historyUnlockBtn').addEventListener('click', async () => {
         const rec = selectedRecord();
@@ -1260,10 +1260,15 @@
 
         const inputCode = el('historyAccessCodeInput').value.trim();
         el('historyCodeError').classList.add('hidden');
-        await showHistoryForRecord(rec, inputCode);
+        if(inputCode !== EDIT_ACCESS_CODE){
+          el('historyCodeError').classList.remove('hidden');
+          return;
+        }
+        grantSharedAccess();
+        await showHistoryForRecord(rec, EDIT_ACCESS_CODE);
       });
-      el('customerLockBtn').addEventListener('click',() => { lockCustomerModal(); });
-      el('historyLockBtn').addEventListener('click',() => { lockHistoryModal(); });
+      el('customerLockBtn').addEventListener('click',() => { revokeSharedAccess(); lockCustomerModal(); lockHistoryModal(); });
+      el('historyLockBtn').addEventListener('click',() => { revokeSharedAccess(); lockCustomerModal(); lockHistoryModal(); });
       el('customerAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('customerUnlockBtn').click(); } });
       el('historyAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('historyUnlockBtn').click(); } });
       el('editAccessCodeInput').addEventListener('keydown', (event) => { if(event.key === 'Enter'){ event.preventDefault(); unlockEdit(); } });
