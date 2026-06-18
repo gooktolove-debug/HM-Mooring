@@ -26,6 +26,15 @@
     button.ghost{background:#fff}
     button.small{padding:8px 12px;font-size:13px;border-radius:12px}
     button.danger{border-color:#fecaca;color:var(--danger);background:#fff1f2}
+    button.pink{background:#ec4899;color:#fff;border-color:#ec4899}
+    button.pink:hover{background:#db2777;border-color:#db2777}
+    .temp-user-filter-wrap{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+    .temp-user-filter-title{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px}
+    .temp-user-filter-chips{display:flex;flex-wrap:wrap;gap:8px}
+    .temp-user-filter-chips button{padding:7px 10px;font-size:12px;border-radius:999px}
+    .temp-user-filter-chips button.active,
+    .temp-user-filter-chips button.primary,
+    .temp-user-filter-chips button[aria-pressed="true"]{background:var(--primary)!important;color:#fff!important;border-color:var(--primary)!important}
 
     .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:20px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
@@ -160,6 +169,9 @@
     .temp-user-field{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#f8fafc}
     .temp-user-key{font-size:11px;color:var(--muted);font-weight:700}
     .temp-user-val{margin-top:5px;font-size:13px;color:var(--text);font-weight:600;word-break:break-word;white-space:pre-wrap}
+    .temp-user-edit-input{width:100%;margin-top:6px;border:1px solid #cbd5e1;border-radius:10px;padding:9px 10px;font-size:13px;font-family:inherit;outline:none;background:#fff}
+    .temp-user-edit-input:focus{border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.10)}
+    .temp-user-edit-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     @media (max-width:760px){.temp-user-fields{grid-template-columns:1fr}}
     /* ── Edit Mooring Modal ── */
     .edit-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -205,16 +217,15 @@
         <div class="subtitle"></div>
       </div>
       <div class="actions">
-        <button class="primary" id="reloadBtn">Reload Live Moorings</button>
+        <button class="primary" id="refreshLocationCacheBtn" type="button" title="Admin: refresh cached pin GPS from ArcGIS into Supabase">Refresh Location Cache</button>
         <button id="resetFiltersBtn">Reset Filters</button>
         <button id="fitAllBtn">Zoom out to All Pins</button>
-          <button id="currentLocationBtn" type="button">Current Location</button>
-          <button id="refreshLocationCacheBtn" type="button" title="Admin: refresh cached pin GPS from ArcGIS into Supabase">Refresh Location Cache</button>
+          <button id="currentLocationBtn" class="pink" type="button">Current Location</button>
       </div>
     </div>
 
     <div class="stats">
-      <div class="card stat-card"><div class="stat-top"><div class="icon-box">📍</div><div><div class="stat-label">Mapped Pins</div><div class="stat-value" id="statMapped">0</div><div class="stat-sub">Visible pins on the map</div></div></div><button id="toggleMappedDetailsBtn" class="small ghost overdue-details-toggle" type="button">▶ Show Details</button><div id="mappedDetailsSection" class="collapsed"><div class="facility-filter-wrap"><div class="facility-filter-title">Facility Type Filter</div><div class="facility-filter-chips"><button type="button" class="small ghost facility-type-btn" data-facility-type="all">All Facility Types</button><button type="button" class="small ghost facility-type-btn" data-facility-type="swing">Swing</button><button type="button" class="small ghost facility-type-btn" data-facility-type="swing_mud">Swing Mud</button><button type="button" class="small ghost facility-type-btn" data-facility-type="pile">Pile</button><button type="button" class="small ghost facility-type-btn" data-facility-type="private_pile">Private Pile</button><button type="button" class="small ghost facility-type-btn" data-facility-type="commercial_swing">Commercial Swing</button><button type="button" class="small ghost facility-type-btn" data-facility-type="other">Other</button><button type="button" class="small ghost facility-type-btn" data-facility-type="unknown">Unknown</button></div></div></div></div>
+      <div class="card stat-card"><div class="stat-top"><div class="icon-box">📍</div><div><div class="stat-label">Mapped Pins</div><div class="stat-value" id="statMapped">0</div><div class="stat-sub">Visible pins on the map</div></div></div><button id="toggleMappedDetailsBtn" class="small ghost overdue-details-toggle" type="button">▶ Show Details</button><div id="mappedDetailsSection" class="collapsed"><div class="facility-filter-wrap"><div class="facility-filter-title">Facility Type Filter</div><div class="facility-filter-chips"><button type="button" class="small ghost facility-type-btn" data-facility-type="all">All Facility Types</button><button type="button" class="small ghost facility-type-btn" data-facility-type="swing">Swing</button><button type="button" class="small ghost facility-type-btn" data-facility-type="swing_mud">Swing Mud</button><button type="button" class="small ghost facility-type-btn" data-facility-type="pile">Pile</button><button type="button" class="small ghost facility-type-btn" data-facility-type="private_pile">Private Pile</button><button type="button" class="small ghost facility-type-btn" data-facility-type="commercial_swing">Commercial Swing</button><button type="button" class="small ghost facility-type-btn" data-facility-type="other">Other</button><button type="button" class="small ghost facility-type-btn" data-facility-type="unknown">Unknown</button></div></div><div class="temp-user-filter-wrap"><div class="temp-user-filter-title">Temp User Filter</div><div class="temp-user-filter-chips"><button type="button" class="small ghost temp-user-filter-btn" data-temp-user-filter="on">Temp User On</button></div></div></div></div>
       <div class="card stat-card"><div class="stat-top"><div class="icon-box">🚨</div><div><div class="stat-label">Inspection Over 3 Years</div><div class="stat-value" id="statOverdueInspection">0</div><div class="stat-sub">Moorings with overdue inspections</div></div></div><button id="toggleOverdueDetailsBtn" class="small ghost overdue-details-toggle" type="button">▶ Show Details</button><div id="overdueDetailsSection" class="collapsed"><div class="mini-stats"><div><div class="mini-stat-label">Terminated Permits</div><div class="mini-stat-value" id="statTerminatedPermits">0</div><div class="mini-stat-sub"></div></div><div><div class="mini-stat-label"></div></div></div><div class="overdue-filter-wrap"><div class="overdue-filter-title">Overdue Age Filter</div><div class="overdue-filter-chips"><button type="button" class="small ghost overdue-age-btn" data-overdue-age="all">All Overdue</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="within2">≤ 2 months</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="3to4">3–4 months</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="5to11">5–11 months</button><button type="button" class="small ghost overdue-age-btn" data-overdue-age="12plus">12+ months</button></div></div><div class="detail-toolbar" style="margin-top:14px;"><button id="overdueOnlyBtn" class="small ghost" type="button">Show Only Overdue</button></div></div></div>
     </div>
 
@@ -342,13 +353,35 @@
     </div>
   </div>
 
+  <div id="tempUserAccessModalBackdrop" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="tempUserAccessModalTitle">
+      <div class="modal-head">
+        <h3 id="tempUserAccessModalTitle" class="modal-title">Temp User Access Code</h3>
+        <button id="tempUserAccessModalClose" class="small danger" type="button">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="muted-box">Enter the access code to unlock temp user details for the selected mooring.</div>
+        <label class="field-label" for="tempUserAccessCodeInput">Access Code</label>
+        <input id="tempUserAccessCodeInput" class="field" type="password" placeholder="Enter access code" autocomplete="off" />
+        <div class="inline-note">Enter the same access code used for Customer Details, History, and Edit.</div>
+        <div id="tempUserAccessCodeError" class="code-error hidden">Incorrect access code. Please try again.</div>
+        <div class="modal-actions"><button id="tempUserAccessUnlockBtn" class="primary" type="button">Unlock Temp User</button></div>
+      </div>
+    </div>
+  </div>
   <div id="tempUserModalBackdrop" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="tempUserModalTitle" style="width:min(760px,100%);max-height:min(680px,86vh);">
       <div class="modal-head">
         <h3 id="tempUserModalTitle" class="modal-title">Temp User Details</h3>
-        <button id="tempUserModalClose" class="small danger" type="button">Close</button>
+        <div class="temp-user-edit-actions">
+          <button id="tempUserEditBtn" class="small ghost" type="button">Edit</button>
+          <button id="tempUserSaveBtn" class="small primary hidden" type="button">Save</button>
+          <button id="tempUserCancelBtn" class="small ghost hidden" type="button">Cancel</button>
+          <button id="tempUserModalClose" class="small danger" type="button">Close</button>
+        </div>
       </div>
       <div class="modal-body">
+        <div id="tempUserEditStatus" class="edit-status hidden"></div>
         <div id="tempUserDetailsEmpty" class="muted-box hidden">No temp user details were found for this mooring code.</div>
         <div id="tempUserDetailsGrid" class="temp-user-grid"></div>
       </div>
@@ -406,7 +439,10 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" style="width:min(840px,100%);max-height:min(780px,90vh);">
       <div class="modal-head">
         <h3 id="editModalTitle" class="modal-title">Edit Mooring Details</h3>
-        <button id="editModalClose" class="small danger" type="button">Close</button>
+        <div class="temp-user-edit-actions">
+          <button id="addTempUserBtn" class="small ghost" type="button">Add Temp User</button>
+          <button id="editModalClose" class="small danger" type="button">Close</button>
+        </div>
       </div>
       <div class="modal-body">
         <div class="muted-box" id="editModalIntro">Update the selected latest mooring registry row below.</div>
@@ -462,13 +498,17 @@
       { key: 'mooring_permit_date_of_termination', label: 'Mooring Permit Date Of Termination' },
       { key: 'mooring_faclity_type_code', label: 'Mooring Facility Type Code' }
     ];
-    const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false, overdueAgeFilter: 'all', facilityTypeFilter: 'all' };
+    const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false, overdueAgeFilter: 'all', facilityTypeFilter: 'all', tempUserFilter: 'all' };
     const registryByCode = new Map();
     const customerDetailsCache = new Map();
     const historyDetailsCache = new Map();
     const tempUserByCode = new Map();
+    let tempUserEditMode = false;
+    let tempUserAddMode = false;
+    let tempUserAddTargetRecord = null;
     let customerAccessGranted = false;
     let historyAccessGranted = false;
+    let tempUserAccessGranted = false;
     let editAccessGranted = false;
     let sharedAccessGranted = false;
     let supabaseClient = null;
@@ -603,12 +643,14 @@
       customerAccessGranted = true;
       historyAccessGranted = true;
       editAccessGranted = true;
+      tempUserAccessGranted = true;
     }
     function revokeSharedAccess(){
       sharedAccessGranted = false;
       customerAccessGranted = false;
       historyAccessGranted = false;
       editAccessGranted = false;
+      tempUserAccessGranted = false;
     }
     function cleanContactValue(value){
       const raw = String(value ?? '').trim();
@@ -658,7 +700,10 @@
         temp_user_phoneah: firstNonEmpty(row.Temp_User_PhoneAh, row.temp_user_phoneah, row.TEMP_USER_PHONEAH, row['Temp User PhoneAh'], row['Temp User Phone AH']),
         temp_user_phonewk: firstNonEmpty(row.Temp_User_PhoneWk, row.temp_user_phonewk, row.TEMP_USER_PHONEWK, row['Temp User PhoneWk'], row['Temp User Phone WK']),
         temp_user_phonemob: firstNonEmpty(row.Temp_User_PhoneMob, row.temp_user_phonemob, row.TEMP_USER_PHONEMOB, row['Temp User PhoneMob'], row['Temp User Phone Mobile']),
-        temp_user_email: firstNonEmpty(row.Temp_User_Email, row.temp_user_email, row.TEMP_USER_EMAIL, row['Temp User Email'])
+        temp_user_email: firstNonEmpty(row.Temp_User_Email, row.temp_user_email, row.TEMP_USER_EMAIL, row['Temp User Email']),
+        _raw: row,
+        _original_mooring_code: firstNonEmpty(row.mooring_code, row.MOORING_CODE, row.Mooring_Code, row['Mooring Code']),
+        _original_occupied_date: firstNonEmpty(row.Occupied_Date, row.occupied_date, row.OCCUPIED_DATE, row['Occupied Date'])
       };
     }
     function hasOccupiedDate(value){
@@ -703,6 +748,14 @@
       if(!rec) return [];
       return (tempUserByCode.get(normalizeCode(rec.mooringCode)) || []).filter((row) => hasOccupiedDate(row.occupied_date));
     }
+    function hasActiveTempUser(record){
+      return tempUserRowsForRecord(record).length > 0;
+    }
+    function tempUserFilterCounts(records){
+      const counts = { on: 0 };
+      records.forEach((record) => { if(hasActiveTempUser(record)) counts.on += 1; });
+      return counts;
+    }
     function updateTempUserButton(rec){
       const btn = el('tempUserBtn');
       if(!btn) return;
@@ -711,36 +764,231 @@
       btn.classList.toggle('hidden', !hasRows);
       btn.textContent = hasRows ? (rows.length > 1 ? `Temp User On (${rows.length})` : 'Temp User On') : 'Temp User On';
     }
-    function closeTempUserModal(){ el('tempUserModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
+    function tempUserColumnCandidates(key){
+      return {
+        mooring_code: ['mooring_code', 'MOORING_CODE', 'Mooring_Code', 'Mooring Code'],
+        temp_boat_name: ['Temp_Boat_Name', 'temp_boat_name', 'TEMP_BOAT_NAME', 'Temp Boat Name'],
+        occupied_date: ['Occupied_Date', 'occupied_date', 'OCCUPIED_DATE', 'Occupied Date'],
+        temp_user_name: ['Temp_User_Name', 'temp_user_name', 'TEMP_USER_NAME', 'Temp User Name'],
+        temp_user_phoneah: ['Temp_User_PhoneAh', 'temp_user_phoneah', 'TEMP_USER_PHONEAH', 'Temp User PhoneAh', 'Temp User Phone AH'],
+        temp_user_phonewk: ['Temp_User_PhoneWk', 'temp_user_phonewk', 'TEMP_USER_PHONEWK', 'Temp User PhoneWk', 'Temp User Phone WK'],
+        temp_user_phonemob: ['Temp_User_PhoneMob', 'temp_user_phonemob', 'TEMP_USER_PHONEMOB', 'Temp User PhoneMob', 'Temp User Phone Mobile'],
+        temp_user_email: ['Temp_User_Email', 'temp_user_email', 'TEMP_USER_EMAIL', 'Temp User Email'],
+        mooring_permit_date_of_issue: ['mooring_permit_date_of_issue', 'MOORING_PERMIT_DATE_OF_ISSUE', 'Mooring Permit Date Of Issue']
+      }[key] || [key];
+    }
+    function tempUserColumnName(rawRow, key){
+      const raw = rawRow || {};
+      const candidates = tempUserColumnCandidates(key);
+      const found = candidates.find((candidate) => Object.prototype.hasOwnProperty.call(raw, candidate));
+      return found || candidates[0];
+    }
+    function tempUserFieldDefs(){
+      return [
+        ['mooring_code', 'Mooring Code'],
+        ['temp_boat_name', 'Temp Boat Name'],
+        ['occupied_date', 'Occupied Date'],
+        ['temp_user_name', 'Temp User Name'],
+        ['temp_user_phoneah', 'Phone AH'],
+        ['temp_user_phonewk', 'Phone WK'],
+        ['temp_user_phonemob', 'Phone Mobile'],
+        ['temp_user_email', 'Email']
+      ];
+    }
+    function makeEmptyTempUserRow(rec){
+      const code = normalizeCode(rec?.mooringCode || '');
+      return { mooring_code: code, temp_boat_name: '', occupied_date: '', temp_user_name: '', temp_user_phoneah: '', temp_user_phonewk: '', temp_user_phonemob: '', temp_user_email: '', _raw: {}, _original_mooring_code: code, _original_occupied_date: '' };
+    }
+    function setTempUserEditStatus(message='', type=''){
+      const box = el('tempUserEditStatus');
+      if(!box) return;
+      if(!message){ box.textContent = ''; box.className = 'edit-status hidden'; return; }
+      box.textContent = message;
+      box.className = `edit-status ${type || ''}`;
+    }
+    function resetTempUserAccessModalState(){ el('tempUserAccessCodeInput').value = ''; el('tempUserAccessCodeError').classList.add('hidden'); }
+    function openTempUserAccessModal(){
+      const rec = selectedRecord();
+      if(!rec) return;
+      resetTempUserAccessModalState();
+      el('tempUserAccessModalBackdrop').classList.remove('hidden');
+      lockBodyScroll();
+      setTimeout(() => el('tempUserAccessCodeInput')?.focus(), 0);
+    }
+    function closeTempUserAccessModal(){ el('tempUserAccessModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
+    function unlockTempUserAccess(){
+      const code = el('tempUserAccessCodeInput').value.trim();
+      if(code !== EDIT_ACCESS_CODE){ el('tempUserAccessCodeError').classList.remove('hidden'); el('tempUserAccessCodeInput').focus(); return; }
+      grantSharedAccess();
+      closeTempUserAccessModal();
+      openTempUserModal();
+    }
+    function openTempUserProtected(){
+      const rec = selectedRecord();
+      if(!rec) return;
+      if(sharedAccessGranted || tempUserAccessGranted){ openTempUserModal(); return; }
+      openTempUserAccessModal();
+    }
+    function setTempUserEditMode(enabled){
+      tempUserEditMode = !!enabled;
+      el('tempUserEditBtn')?.classList.toggle('hidden', tempUserEditMode || tempUserAddMode);
+      el('tempUserSaveBtn')?.classList.toggle('hidden', !tempUserEditMode && !tempUserAddMode);
+      el('tempUserCancelBtn')?.classList.toggle('hidden', !tempUserEditMode && !tempUserAddMode);
+      renderTempUserModalContent();
+    }
+    function closeTempUserModal(){ tempUserEditMode = false; tempUserAddMode = false; tempUserAddTargetRecord = null; setTempUserEditStatus(''); el('tempUserModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
+    function tempUserRowsForModal(){
+      if(tempUserAddMode) return [makeEmptyTempUserRow(tempUserAddTargetRecord || selectedRecord())];
+      return tempUserRowsForRecord(selectedRecord());
+    }
+    function renderTempUserModalContent(){
+      const rec = tempUserAddTargetRecord || selectedRecord();
+      const rows = tempUserRowsForModal();
+      const empty = el('tempUserDetailsEmpty');
+      const grid = el('tempUserDetailsGrid');
+      if(!rec || !rows.length){ empty.classList.remove('hidden'); grid.innerHTML = ''; return; }
+      empty.classList.add('hidden');
+      const fields = tempUserFieldDefs();
+      const editable = tempUserEditMode || tempUserAddMode;
+      grid.innerHTML = rows.map((row, idx) => {
+        const title = tempUserAddMode ? 'Add Temp User' : (rows.length > 1 ? `Temp User #${idx + 1}` : 'Temp User On');
+        const body = fields.map(([key, label]) => {
+          const value = row[key] || '';
+          const display = key === 'occupied_date' ? (formatDateValue(value) || value || '-') : (value || '-');
+          if(editable){
+            const inputType = key === 'temp_user_email' ? 'email' : 'text';
+            const placeholder = key === 'occupied_date' ? 'e.g. 25/05/2026 0:00' : '';
+            return `<div class="temp-user-field"><label class="temp-user-key" for="temp_edit_${idx}_${key}">${escapeHtml(label)}</label><input id="temp_edit_${idx}_${key}" class="temp-user-edit-input" data-temp-row-index="${idx}" data-temp-field="${escapeHtml(key)}" type="${inputType}" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(value)}" /></div>`;
+          }
+          return `<div class="temp-user-field"><div class="temp-user-key">${escapeHtml(label)}</div><div class="temp-user-val">${escapeHtml(display)}</div></div>`;
+        }).join('');
+        return `<div class="temp-user-row" data-temp-row-index="${idx}"><div class="temp-user-row-title">${escapeHtml(title)}</div><div class="temp-user-fields">${body}</div></div>`;
+      }).join('');
+    }
     function openTempUserModal(){
       const rec = selectedRecord();
       if(!rec) return;
-      const rows = tempUserRowsForRecord(rec);
+      tempUserEditMode = false;
+      tempUserAddMode = false;
+      tempUserAddTargetRecord = null;
+      setTempUserEditStatus('');
       el('tempUserModalTitle').textContent = `Temp User Details — ${normalizeCode(rec.mooringCode)}`;
+      el('tempUserEditBtn')?.classList.remove('hidden');
+      el('tempUserSaveBtn')?.classList.add('hidden');
+      el('tempUserCancelBtn')?.classList.add('hidden');
       el('tempUserModalBackdrop').classList.remove('hidden');
       lockBodyScroll();
-      const empty = el('tempUserDetailsEmpty');
-      const grid = el('tempUserDetailsGrid');
-      if(!rows.length){
-        empty.classList.remove('hidden');
-        grid.innerHTML = '';
-        return;
+      renderTempUserModalContent();
+    }
+    function openAddTempUserModal(){
+      const rec = selectedRecord();
+      if(!rec) return;
+      tempUserEditMode = false;
+      tempUserAddMode = true;
+      tempUserAddTargetRecord = rec;
+      setTempUserEditStatus('');
+      closeEditModal();
+      el('tempUserModalTitle').textContent = `Add Temp User — ${normalizeCode(rec.mooringCode)}`;
+      el('tempUserEditBtn')?.classList.add('hidden');
+      el('tempUserSaveBtn')?.classList.remove('hidden');
+      el('tempUserCancelBtn')?.classList.remove('hidden');
+      el('tempUserModalBackdrop').classList.remove('hidden');
+      lockBodyScroll();
+      renderTempUserModalContent();
+    }
+    function buildTempUserUpdatePayload(row, values, rawOverride=null){
+      const raw = rawOverride || row?._raw || {};
+      const payload = {};
+      Object.entries(values).forEach(([key, value]) => {
+        const column = tempUserColumnName(raw, key);
+        payload[column] = String(value ?? '').trim() === '' ? null : String(value ?? '').trim();
+      });
+      return payload;
+    }
+    async function fetchRawRegistryRowsForTempUser(mooringCode){
+      const key = normalizeCode(mooringCode);
+      if(!key || !supabaseClient) return [];
+      const { data, error } = await supabaseClient.from(SUPABASE_TEMP_USER_TABLE).select('*').ilike('mooring_code', key);
+      if(error) throw error;
+      return data || [];
+    }
+    function chooseRawRegistryRowForTempUser(rawRows, rec){
+      const selectedIssue = String(getRegistryExtra(rec?.mooringCode)?.mooring_permit_date_of_issue || '').trim();
+      if(selectedIssue){
+        const match = rawRows.find((raw) => String(firstNonEmpty(raw.mooring_permit_date_of_issue, raw.MOORING_PERMIT_DATE_OF_ISSUE, raw['Mooring Permit Date Of Issue']) || '').trim() === selectedIssue);
+        if(match) return match;
       }
-      empty.classList.add('hidden');
-      grid.innerHTML = rows.map((row, idx) => {
-        const title = rows.length > 1 ? `Temp User #${idx + 1}` : 'Temp User On';
-        const items = [
-          ['Mooring Code', row.mooring_code || '-'],
-          ['Temp Boat Name', row.temp_boat_name || '-'],
-          ['Occupied Date', formatDateValue(row.occupied_date) || row.occupied_date || '-'],
-          ['Temp User Name', row.temp_user_name || '-'],
-          ['Phone AH', row.temp_user_phoneah || '-'],
-          ['Phone WK', row.temp_user_phonewk || '-'],
-          ['Phone Mobile', row.temp_user_phonemob || '-'],
-          ['Email', row.temp_user_email || '-']
-        ];
-        return `<div class="temp-user-row"><div class="temp-user-row-title">${escapeHtml(title)}</div><div class="temp-user-fields">${items.map(([k,v]) => `<div class="temp-user-field"><div class="temp-user-key">${escapeHtml(k)}</div><div class="temp-user-val">${escapeHtml(v)}</div></div>`).join('')}</div></div>`;
-      }).join('');
+      return rawRows[0] || null;
+    }
+    async function updateTempUserRow(row, values){
+      const raw = row?._raw || {};
+      const payload = buildTempUserUpdatePayload(row, values);
+      const idColumn = ['id', 'ID'].find((candidate) => Object.prototype.hasOwnProperty.call(raw, candidate));
+      let query = supabaseClient.from(SUPABASE_TEMP_USER_TABLE).update(payload);
+      if(idColumn && raw[idColumn] !== null && raw[idColumn] !== undefined && String(raw[idColumn]).trim() !== '') query = query.eq(idColumn, raw[idColumn]);
+      else {
+        const mooringColumn = tempUserColumnName(raw, 'mooring_code');
+        const occupiedColumn = tempUserColumnName(raw, 'occupied_date');
+        query = query.eq(mooringColumn, row._original_mooring_code || row.mooring_code).eq(occupiedColumn, row._original_occupied_date || row.occupied_date);
+      }
+      const { error } = await query;
+      if(error) throw error;
+    }
+    async function addTempUserToSelectedRegistryRow(values){
+      const rec = tempUserAddTargetRecord || selectedRecord();
+      if(!rec || !supabaseClient) return;
+      if(!hasOccupiedDate(values.occupied_date)) throw new Error('Occupied Date is required to activate Temp User On.');
+      const rawRows = await fetchRawRegistryRowsForTempUser(values.mooring_code || rec.mooringCode);
+      const raw = chooseRawRegistryRowForTempUser(rawRows, rec);
+      if(!raw) throw new Error('Could not find the selected mooring row in Supabase to add temp user details.');
+      const payload = buildTempUserUpdatePayload(makeEmptyTempUserRow(rec), values, raw);
+      const idColumn = ['id', 'ID'].find((candidate) => Object.prototype.hasOwnProperty.call(raw, candidate));
+      let query = supabaseClient.from(SUPABASE_TEMP_USER_TABLE).update(payload);
+      if(idColumn && raw[idColumn] !== null && raw[idColumn] !== undefined && String(raw[idColumn]).trim() !== '') query = query.eq(idColumn, raw[idColumn]);
+      else {
+        const mooringColumn = tempUserColumnName(raw, 'mooring_code');
+        const issueColumn = tempUserColumnName(raw, 'mooring_permit_date_of_issue');
+        query = query.eq(mooringColumn, firstNonEmpty(raw[mooringColumn], values.mooring_code, rec.mooringCode));
+        if(Object.prototype.hasOwnProperty.call(raw, issueColumn) && raw[issueColumn]) query = query.eq(issueColumn, raw[issueColumn]);
+      }
+      const { error } = await query;
+      if(error) throw error;
+    }
+    function readTempUserFormValues(idx=0){
+      const values = {};
+      tempUserFieldDefs().forEach(([key]) => {
+        const input = document.querySelector(`.temp-user-edit-input[data-temp-row-index="${idx}"][data-temp-field="${key}"]`);
+        if(input) values[key] = input.value;
+      });
+      return values;
+    }
+    async function saveTempUserEdits(){
+      const rec = tempUserAddTargetRecord || selectedRecord();
+      if(!rec || !supabaseClient) return;
+      const rows = tempUserRowsForModal();
+      if(!rows.length) return;
+      const saveBtn = el('tempUserSaveBtn');
+      if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+      setTempUserEditStatus(tempUserAddMode ? 'Adding temp user details...' : 'Saving temp user details...', '');
+      try{
+        if(tempUserAddMode) await addTempUserToSelectedRegistryRow(readTempUserFormValues(0));
+        else for(let idx = 0; idx < rows.length; idx += 1) await updateTempUserRow(rows[idx], readTempUserFormValues(idx));
+        await loadTempUserData();
+        tempUserEditMode = false;
+        tempUserAddMode = false;
+        tempUserAddTargetRecord = null;
+        setTempUserEditStatus('Temp user details saved.', 'success');
+        renderAll(true, false, false);
+        el('tempUserEditBtn')?.classList.remove('hidden');
+        el('tempUserSaveBtn')?.classList.add('hidden');
+        el('tempUserCancelBtn')?.classList.add('hidden');
+        renderTempUserModalContent();
+      } catch(err){
+        console.error('saveTempUserEdits error:', err);
+        setTempUserEditStatus('Failed to save temp user details: ' + (err?.message || err), 'error');
+      } finally {
+        if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+      }
     }
 
     function resetCustomerModalState(){
@@ -1235,6 +1483,7 @@
       state.filtered = state.records.filter((r)=>{
         const mergedBoatName = effectiveBoatName(r);
         if(state.facilityTypeFilter && state.facilityTypeFilter !== 'all' && facilityFilterKey(r) !== state.facilityTypeFilter) return false;
+        if(state.tempUserFilter === 'on' && !hasActiveTempUser(r)) return false;
         if(state.overdueAgeFilter !== 'all'){
           if(overdueAgeBucket(r) !== state.overdueAgeFilter) return false;
         } else if(state.overdueOnly && !isRecordInspectionStale(r)) {
@@ -1253,6 +1502,7 @@
       const terminatedCount = state.records.filter(r => isRecordTerminated(r)).length;
       const ageCounts = overdueAgeCounts(state.records);
       const facilityCounts = facilityTypeCounts(state.records);
+      const tempUserCounts = tempUserFilterCounts(state.records);
       el('statMapped').textContent = state.filtered.length;
       el('statOverdueInspection').textContent = overdueCount;
       const terminatedEl = el('statTerminatedPermits'); if(terminatedEl) terminatedEl.textContent = terminatedCount;
@@ -1268,6 +1518,17 @@
         btn.classList.toggle('active', active);
         btn.classList.toggle('primary', active);
         btn.classList.toggle('ghost', !active);
+      });
+      document.querySelectorAll('.temp-user-filter-btn').forEach((btn) => {
+        const active = state.tempUserFilter === 'on';
+        btn.textContent = 'Temp User On';
+        btn.classList.toggle('active', active);
+        btn.classList.toggle('primary', active);
+        btn.classList.toggle('ghost', !active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.style.backgroundColor = active ? 'var(--primary)' : '';
+        btn.style.color = active ? '#fff' : '';
+        btn.style.borderColor = active ? 'var(--primary)' : '';
       });
     }
     function popupHtml(r){
@@ -1479,13 +1740,26 @@
     function toggleOverdueDetails(){ const section = el('overdueDetailsSection'); const btn = el('toggleOverdueDetailsBtn'); if(!section || !btn) return; const isCollapsed = section.classList.toggle('collapsed'); btn.textContent = isCollapsed ? '▶ Show Details' : '▼ Hide Details'; }
     function toggleMappedDetails(){ const section = el('mappedDetailsSection'); const btn = el('toggleMappedDetailsBtn'); if(!section || !btn) return; const isCollapsed = section.classList.toggle('collapsed'); btn.textContent = isCollapsed ? '▶ Show Details' : '▼ Hide Details'; }
     function setFacilityTypeFilter(value){ state.facilityTypeFilter = value || 'all'; renderAll(true,false,false); }
-    function resetFilters(){ ['f_mooringCode','f_boatName'].forEach(id => el(id).value=''); state.overdueOnly = false; state.overdueAgeFilter = 'all'; state.facilityTypeFilter = 'all'; renderAll(true,false,false); }
+    function setTempUserFilter(){
+      state.tempUserFilter = state.tempUserFilter === 'on' ? 'all' : 'on';
+      document.querySelectorAll('.temp-user-filter-btn').forEach((btn) => {
+        const active = state.tempUserFilter === 'on';
+        btn.classList.toggle('active', active);
+        btn.classList.toggle('primary', active);
+        btn.classList.toggle('ghost', !active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.style.backgroundColor = active ? 'var(--primary)' : '';
+        btn.style.color = active ? '#fff' : '';
+        btn.style.borderColor = active ? 'var(--primary)' : '';
+      });
+      renderAll(true,false,false);
+    }
+    function resetFilters(){ ['f_mooringCode','f_boatName'].forEach(id => el(id).value=''); state.overdueOnly = false; state.overdueAgeFilter = 'all'; state.facilityTypeFilter = 'all'; state.tempUserFilter = 'all'; renderAll(true,false,false); }
     function fitAllPins(){ if(!state.filtered.length) return; map.fitBounds(state.filtered.map(r => [r.lat,r.lon]), { padding:[24,24] }); }
 
     function initEvents(){
       el('f_mooringCode').addEventListener('input',()=>renderAll(true,false,true));
       el('f_boatName').addEventListener('input',()=>renderAll(true,false,true));
-      el('reloadBtn').addEventListener('click',loadAllData);
       el('resetFiltersBtn').addEventListener('click',resetFilters);
       el('fitAllBtn').addEventListener('click',fitAllPins);
       el('currentLocationBtn').addEventListener('click',showCurrentLocation);
@@ -1494,17 +1768,25 @@
       el('toggleOverdueDetailsBtn').addEventListener('click',toggleOverdueDetails);
       el('toggleMappedDetailsBtn').addEventListener('click',toggleMappedDetails);
       document.querySelectorAll('.facility-type-btn').forEach(btn => btn.addEventListener('click', () => setFacilityTypeFilter(btn.dataset.facilityType || 'all')));
+      document.querySelectorAll('.temp-user-filter-btn').forEach(btn => btn.addEventListener('click', () => setTempUserFilter()));
       document.querySelectorAll('.overdue-age-btn').forEach(btn => btn.addEventListener('click', () => setOverdueAgeFilter(btn.dataset.overdueAge || 'all')));
-      el('tempUserBtn').addEventListener('click',openTempUserModal);
+      el('tempUserBtn').addEventListener('click',openTempUserProtected);
       el('customerDetailsBtn').addEventListener('click',openCustomerModal);
       el('historyBtn').addEventListener('click',openHistoryModal);
       el('editDetailsBtn').addEventListener('click',openEditAccessModal);
+      el('tempUserEditBtn').addEventListener('click',() => setTempUserEditMode(true));
+      el('tempUserSaveBtn').addEventListener('click',saveTempUserEdits);
+      el('tempUserCancelBtn').addEventListener('click',() => { if(tempUserAddMode){ closeTempUserModal(); } else { setTempUserEditStatus(''); setTempUserEditMode(false); } });
+      el('tempUserAccessModalClose').addEventListener('click',closeTempUserAccessModal);
+      el('tempUserAccessUnlockBtn').addEventListener('click',unlockTempUserAccess);
+      el('tempUserAccessCodeInput').addEventListener('keydown', (event) => { if(event.key === 'Enter'){ event.preventDefault(); unlockTempUserAccess(); } });
       el('tempUserModalClose').addEventListener('click',closeTempUserModal);
       el('customerModalClose').addEventListener('click',closeCustomerModal);
       el('historyModalClose').addEventListener('click',closeHistoryModal);
       el('editAccessModalClose').addEventListener('click',closeEditAccessModal);
       el('editAccessUnlockBtn').addEventListener('click',unlockEdit);
       el('editModalClose').addEventListener('click',closeEditModal);
+      el('addTempUserBtn').addEventListener('click',openAddTempUserModal);
       el('editCancelBtn').addEventListener('click',closeEditModal);
       el('editForm').addEventListener('submit',saveEditForm);
       el('customerUnlockBtn').addEventListener('click', async () => {
@@ -1538,12 +1820,14 @@
       el('customerAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('customerUnlockBtn').click(); } });
       el('historyAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('historyUnlockBtn').click(); } });
       el('editAccessCodeInput').addEventListener('keydown', (event) => { if(event.key === 'Enter'){ event.preventDefault(); unlockEdit(); } });
+      el('tempUserAccessModalBackdrop').addEventListener('click', (event) => { if(event.target === el('tempUserAccessModalBackdrop')) closeTempUserAccessModal(); });
       el('tempUserModalBackdrop').addEventListener('click', (event) => { if(event.target === el('tempUserModalBackdrop')) closeTempUserModal(); });
       el('customerModalBackdrop').addEventListener('click', (event) => { if(event.target === el('customerModalBackdrop')) closeCustomerModal(); });
       el('historyModalBackdrop').addEventListener('click', (event) => { if(event.target === el('historyModalBackdrop')) closeHistoryModal(); });
       el('editAccessModalBackdrop').addEventListener('click', (event) => { if(event.target === el('editAccessModalBackdrop')) closeEditAccessModal(); });
       el('editModalBackdrop').addEventListener('click', (event) => { if(event.target === el('editModalBackdrop')) closeEditModal(); });
       window.addEventListener('keydown', (event) => {
+        if(event.key === 'Escape' && !el('tempUserAccessModalBackdrop').classList.contains('hidden')) closeTempUserAccessModal();
         if(event.key === 'Escape' && !el('tempUserModalBackdrop').classList.contains('hidden')) closeTempUserModal();
         if(event.key === 'Escape' && !el('customerModalBackdrop').classList.contains('hidden')) closeCustomerModal();
         if(event.key === 'Escape' && !el('historyModalBackdrop').classList.contains('hidden')) closeHistoryModal();
