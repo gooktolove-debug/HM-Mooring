@@ -150,6 +150,17 @@
     .sp-link-sub{font-size:12px;color:#3b82f6;margin-top:2px;font-weight:400}
     .sp-no-folder{padding:12px 14px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;font-size:13px;color:var(--muted);text-align:center}
 
+    /* ── Temp User Modal ── */
+    #tempUserBtn{background:#0ea5e9;color:#fff;border-color:#0ea5e9}
+    #tempUserBtn:hover{background:#0284c7;border-color:#0284c7}
+    .temp-user-grid{display:grid;grid-template-columns:1fr;gap:12px}
+    .temp-user-row{border:1px solid var(--line);border-radius:16px;padding:14px;background:#fff}
+    .temp-user-row-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:10px}
+    .temp-user-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .temp-user-field{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#f8fafc}
+    .temp-user-key{font-size:11px;color:var(--muted);font-weight:700}
+    .temp-user-val{margin-top:5px;font-size:13px;color:var(--text);font-weight:600;word-break:break-word;white-space:pre-wrap}
+    @media (max-width:760px){.temp-user-fields{grid-template-columns:1fr}}
     /* ── Edit Mooring Modal ── */
     .edit-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
     .edit-field{width:100%;border:1px solid #cbd5e1;border-radius:14px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;background:#fff}
@@ -198,6 +209,7 @@
         <button id="resetFiltersBtn">Reset Filters</button>
         <button id="fitAllBtn">Zoom out to All Pins</button>
           <button id="currentLocationBtn" type="button">Current Location</button>
+          <button id="refreshLocationCacheBtn" type="button" title="Admin: refresh cached pin GPS from ArcGIS into Supabase">Refresh Location Cache</button>
       </div>
     </div>
 
@@ -253,6 +265,7 @@
                 <div id="detailTitle" class="detail-top-title">-</div>
                 <div id="detailStatus" class="detail-top-sub"></div>
                 <div class="detail-toolbar">
+                  <button class="small primary hidden" id="tempUserBtn" type="button">Temp User On</button>
                   <button class="small ghost" id="customerDetailsBtn">Customer Details</button>
                   <button class="small ghost" id="historyBtn">History</button>
                   <button class="small primary" id="editDetailsBtn" type="button">Edit</button>
@@ -329,6 +342,18 @@
     </div>
   </div>
 
+  <div id="tempUserModalBackdrop" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="tempUserModalTitle" style="width:min(760px,100%);max-height:min(680px,86vh);">
+      <div class="modal-head">
+        <h3 id="tempUserModalTitle" class="modal-title">Temp User Details</h3>
+        <button id="tempUserModalClose" class="small danger" type="button">Close</button>
+      </div>
+      <div class="modal-body">
+        <div id="tempUserDetailsEmpty" class="muted-box hidden">No temp user details were found for this mooring code.</div>
+        <div id="tempUserDetailsGrid" class="temp-user-grid"></div>
+      </div>
+    </div>
+  </div>
   <div id="historyModalBackdrop" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle" style="width:min(760px,100%);max-height:min(520px,80vh);">
       <div class="modal-head">
@@ -418,6 +443,8 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_8vscwHQ7y50eUj-RywvmLQ_JGpSp2HE';
     const SUPABASE_PUBLIC_TABLE = 'mooring_registry_import_stg';
     const SUPABASE_CUSTOMER_TABLE = 'mooring_registry_join_current';
+    const SUPABASE_LOCATION_TABLE = 'mooring_locations_cache';
+    const SUPABASE_TEMP_USER_TABLE = 'mooring_registry_import_stg';
 
     // Customer details gate
     const EDIT_ACCESS_CODE = 'akhmmr';
@@ -439,6 +466,7 @@
     const registryByCode = new Map();
     const customerDetailsCache = new Map();
     const historyDetailsCache = new Map();
+    const tempUserByCode = new Map();
     let customerAccessGranted = false;
     let historyAccessGranted = false;
     let editAccessGranted = false;
@@ -619,6 +647,100 @@
         console.warn('fetchRegistryRowsByCode failed:', err);
         return [];
       }
+    }
+
+    function normaliseTempUserRow(row){
+      return {
+        mooring_code: firstNonEmpty(row.mooring_code, row.MOORING_CODE, row.Mooring_Code, row['Mooring Code']),
+        temp_boat_name: firstNonEmpty(row.Temp_Boat_Name, row.temp_boat_name, row.TEMP_BOAT_NAME, row['Temp Boat Name']),
+        occupied_date: firstNonEmpty(row.Occupied_Date, row.occupied_date, row.OCCUPIED_DATE, row['Occupied Date']),
+        temp_user_name: firstNonEmpty(row.Temp_User_Name, row.temp_user_name, row.TEMP_USER_NAME, row['Temp User Name']),
+        temp_user_phoneah: firstNonEmpty(row.Temp_User_PhoneAh, row.temp_user_phoneah, row.TEMP_USER_PHONEAH, row['Temp User PhoneAh'], row['Temp User Phone AH']),
+        temp_user_phonewk: firstNonEmpty(row.Temp_User_PhoneWk, row.temp_user_phonewk, row.TEMP_USER_PHONEWK, row['Temp User PhoneWk'], row['Temp User Phone WK']),
+        temp_user_phonemob: firstNonEmpty(row.Temp_User_PhoneMob, row.temp_user_phonemob, row.TEMP_USER_PHONEMOB, row['Temp User PhoneMob'], row['Temp User Phone Mobile']),
+        temp_user_email: firstNonEmpty(row.Temp_User_Email, row.temp_user_email, row.TEMP_USER_EMAIL, row['Temp User Email'])
+      };
+    }
+    function hasOccupiedDate(value){
+      const raw = String(value ?? '').trim();
+      if(!raw) return false;
+      const lowered = raw.toLowerCase();
+      if(lowered === 'null' || lowered === 'undefined' || lowered === 'nan' || raw === '-') return false;
+      return true;
+    }
+    async function loadTempUserData(){
+      tempUserByCode.clear();
+      if(!supabaseClient || !SUPABASE_TEMP_USER_TABLE) return;
+      try{
+        const pageSize = 1000;
+        let from = 0;
+        let loaded = 0;
+        while(true){
+          const { data, error } = await supabaseClient
+            .from(SUPABASE_TEMP_USER_TABLE)
+            .select('*')
+            .range(from, from + pageSize - 1);
+          if(error) throw error;
+          if(!data || !data.length) break;
+          data.forEach((rawRow) => {
+            const row = normaliseTempUserRow(rawRow);
+            if(!hasOccupiedDate(row.occupied_date)) return;
+            const key = normalizeCode(row.mooring_code);
+            if(!key) return;
+            if(!tempUserByCode.has(key)) tempUserByCode.set(key, []);
+            tempUserByCode.get(key).push(row);
+            loaded += 1;
+          });
+          if(data.length < pageSize) break;
+          from += pageSize;
+        }
+        console.info(`Loaded ${loaded} active temp user rows / ${tempUserByCode.size} mooring codes from ${SUPABASE_TEMP_USER_TABLE}`);
+      } catch(err){
+        console.warn(`Temp user data could not be loaded from ${SUPABASE_TEMP_USER_TABLE}:`, err);
+      }
+    }
+    function tempUserRowsForRecord(rec){
+      if(!rec) return [];
+      return (tempUserByCode.get(normalizeCode(rec.mooringCode)) || []).filter((row) => hasOccupiedDate(row.occupied_date));
+    }
+    function updateTempUserButton(rec){
+      const btn = el('tempUserBtn');
+      if(!btn) return;
+      const rows = tempUserRowsForRecord(rec);
+      const hasRows = rows.length > 0;
+      btn.classList.toggle('hidden', !hasRows);
+      btn.textContent = hasRows ? (rows.length > 1 ? `Temp User On (${rows.length})` : 'Temp User On') : 'Temp User On';
+    }
+    function closeTempUserModal(){ el('tempUserModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
+    function openTempUserModal(){
+      const rec = selectedRecord();
+      if(!rec) return;
+      const rows = tempUserRowsForRecord(rec);
+      el('tempUserModalTitle').textContent = `Temp User Details — ${normalizeCode(rec.mooringCode)}`;
+      el('tempUserModalBackdrop').classList.remove('hidden');
+      lockBodyScroll();
+      const empty = el('tempUserDetailsEmpty');
+      const grid = el('tempUserDetailsGrid');
+      if(!rows.length){
+        empty.classList.remove('hidden');
+        grid.innerHTML = '';
+        return;
+      }
+      empty.classList.add('hidden');
+      grid.innerHTML = rows.map((row, idx) => {
+        const title = rows.length > 1 ? `Temp User #${idx + 1}` : 'Temp User On';
+        const items = [
+          ['Mooring Code', row.mooring_code || '-'],
+          ['Temp Boat Name', row.temp_boat_name || '-'],
+          ['Occupied Date', formatDateValue(row.occupied_date) || row.occupied_date || '-'],
+          ['Temp User Name', row.temp_user_name || '-'],
+          ['Phone AH', row.temp_user_phoneah || '-'],
+          ['Phone WK', row.temp_user_phonewk || '-'],
+          ['Phone Mobile', row.temp_user_phonemob || '-'],
+          ['Email', row.temp_user_email || '-']
+        ];
+        return `<div class="temp-user-row"><div class="temp-user-row-title">${escapeHtml(title)}</div><div class="temp-user-fields">${items.map(([k,v]) => `<div class="temp-user-field"><div class="temp-user-key">${escapeHtml(k)}</div><div class="temp-user-val">${escapeHtml(v)}</div></div>`).join('')}</div></div>`;
+      }).join('');
     }
 
     function resetCustomerModalState(){
@@ -880,6 +1002,131 @@
       finally { el('editSaveBtn').disabled = false; el('editSaveBtn').textContent = 'Save Changes'; }
     }
 
+    function featureToLocationCacheRow(feature){
+      const p = feature.properties || {};
+      const coords = feature.geometry?.coordinates || [];
+      const lat = typeof coords[1] === 'number' ? coords[1] : null;
+      const lon = typeof coords[0] === 'number' ? coords[0] : null;
+      if(lat === null || lon === null) return null;
+      const objectId = String(p.OBJECTID || p.objectid || '').trim();
+      const code = String(p.M_CODE || '').trim();
+      if(!objectId && !code) return null;
+      return {
+        source_objectid: objectId || code,
+        mooring_code: code || objectId,
+        mooring_length: p.M_LENGTH ?? null,
+        mooring_depth: p.M_DEPTH ?? null,
+        tag_number: p.M_TAGNUM || null,
+        boat_name: p.B_BOATNAME || null,
+        zone_name: p.MMA_NAME || p.ZONE_NAME || null,
+        latitude: lat,
+        longitude: lon,
+        raw: p,
+        cached_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    }
+    function normalizeLocationCacheRow(row){
+      const lat = Number(row.latitude);
+      const lon = Number(row.longitude);
+      if(!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return {
+        id: row.source_objectid || row.id || row.mooring_code || `cache-${Math.random().toString(36).slice(2,8)}`,
+        mooringCode: row.mooring_code || '',
+        mooringLength: row.mooring_length ?? '',
+        mooringDepth: row.mooring_depth ?? '',
+        tagNumber: row.tag_number || '',
+        boatName: row.boat_name || '',
+        zoneName: row.zone_name || '',
+        lat,
+        lon,
+        latDmm: formatDMM(lat,'lat'),
+        lonDmm: formatDMM(lon,'lon'),
+        raw: row.raw || row
+      };
+    }
+    async function loadLocationCacheData(){
+      if(!supabaseClient) throw new Error('Supabase client is not ready');
+      const pageSize = 1000;
+      let from = 0;
+      const rows = [];
+      while(true){
+        const { data, error } = await supabaseClient
+          .from(SUPABASE_LOCATION_TABLE)
+          .select('*')
+          .range(from, from + pageSize - 1);
+        if(error) throw error;
+        if(!data || !data.length) break;
+        data.forEach((row) => {
+          const normalised = normalizeLocationCacheRow(row);
+          if(normalised) rows.push(normalised);
+        });
+        if(data.length < pageSize) break;
+        from += pageSize;
+      }
+      return rows;
+    }
+    async function fetchArcGISLocationRows(){
+      const pageSize = 500;
+      let offset = 0;
+      const allFeatures = [];
+      const seenIds = new Set();
+      while(true){
+        const url = new URL(SERVICE_URL);
+        url.searchParams.set('resultOffset', String(offset));
+        url.searchParams.set('resultRecordCount', String(pageSize));
+        url.searchParams.set('orderByFields', 'OBJECTID ASC');
+        const response = await fetch(url.toString(), { mode:'cors' });
+        if(!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const features = data.features || [];
+        features.forEach((feature) => {
+          const p = feature.properties || {};
+          const id = String(p.OBJECTID || p.objectid || `${offset}-${allFeatures.length}`);
+          if(!seenIds.has(id)){
+            seenIds.add(id);
+            allFeatures.push(feature);
+          }
+        });
+        if(features.length < pageSize) break;
+        offset += pageSize;
+        if(offset > 50000) throw new Error('ArcGIS pagination safety stop reached.');
+      }
+      console.info(`Fetched ${allFeatures.length} ArcGIS mooring location features via pagination.`);
+      return allFeatures;
+    }
+    async function refreshLocationCacheFromArcGIS(){
+      const btn = el('refreshLocationCacheBtn');
+      if(!supabaseClient){ showError('Supabase is not ready. Please reload and try again.'); return; }
+      if(btn){ btn.disabled = true; btn.textContent = 'Refreshing Cache...'; }
+      try{
+        showError('Refreshing location cache from ArcGIS into Supabase...');
+        const features = await fetchArcGISLocationRows();
+        const rowsBySourceId = new Map();
+        features.map(featureToLocationCacheRow).filter(Boolean).forEach((row) => {
+          rowsBySourceId.set(String(row.source_objectid), row);
+        });
+        const rows = Array.from(rowsBySourceId.values());
+        if(!rows.length) throw new Error('No valid ArcGIS location rows found.');
+        const chunkSize = 500;
+        for(let i=0;i<rows.length;i+=chunkSize){
+          const chunk = rows.slice(i, i + chunkSize);
+          const { error } = await supabaseClient
+            .from(SUPABASE_LOCATION_TABLE)
+            .upsert(chunk, { onConflict: 'source_objectid' });
+          if(error) throw error;
+        }
+        showError('');
+        console.info(`Location cache refreshed: ${rows.length} rows saved to ${SUPABASE_LOCATION_TABLE}`);
+        await loadLiveData();
+      } catch(err){
+        console.error('refreshLocationCacheFromArcGIS failed:', err);
+        showError('Failed to refresh location cache. Check RLS insert/update policy, unique constraint on source_objectid, and table column names. ' + (err?.message || err));
+      } finally {
+        if(btn){ btn.disabled = false; btn.textContent = 'Refresh Location Cache'; }
+      }
+    }
+
     function normalizeFeature(feature){
       const p = feature.properties || {};
       const coords = feature.geometry?.coordinates || [];
@@ -942,24 +1189,40 @@
 
     async function loadLiveData(){
       try{
-        const response = await fetch(SERVICE_URL,{mode:'cors'});
-        if(!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        const rows = (data.features || []).map(normalizeFeature).filter(r => r.lat !== null && r.lon !== null);
+        let rows = [];
+        let cacheError = null;
+        try{
+          rows = await loadLocationCacheData();
+          console.info(`Loaded ${rows.length} cached mooring locations from ${SUPABASE_LOCATION_TABLE}`);
+        } catch(err){
+          cacheError = err;
+          console.warn('Supabase location cache failed. Falling back to ArcGIS:', err);
+        }
+        if(!rows.length){
+          if(cacheError){
+            showError('Location cache could not be loaded, so the app is temporarily falling back to ArcGIS. ' + (cacheError?.message || ''));
+          } else {
+            showError('Location cache is empty. Falling back to ArcGIS. Use Refresh Location Cache once to save pins into Supabase.');
+          }
+          const features = await fetchArcGISLocationRows();
+          rows = features.map(normalizeFeature).filter(r => r.lat !== null && r.lon !== null);
+        } else {
+          showError('');
+        }
         state.records = rows;
         state.selectedId = rows[0]?.id || null;
         state.fetchedAt = new Date();
         renderAll(true,true,false);
       } catch(err){
         console.error(err);
-        showError('Unable to load the live mooring dataset right now. If this is for production use, consider proxying the ArcGIS service through your own backend.');
+        showError('Unable to load mooring location data. Check Supabase location cache table, RLS SELECT policy, and ArcGIS fallback service. ' + (err?.message || ''));
         state.records=[]; state.filtered=[]; state.selectedId=null; renderAll(true,true,false);
       }
     }
-
     async function loadAllData(){
       showError('');
       await loadRegistryData();
+      await loadTempUserData();
       await loadLiveData();
     }
 
@@ -1226,14 +1489,17 @@
       el('resetFiltersBtn').addEventListener('click',resetFilters);
       el('fitAllBtn').addEventListener('click',fitAllPins);
       el('currentLocationBtn').addEventListener('click',showCurrentLocation);
+      el('refreshLocationCacheBtn').addEventListener('click',refreshLocationCacheFromArcGIS);
       el('overdueOnlyBtn').addEventListener('click',toggleOverdueOnly);
       el('toggleOverdueDetailsBtn').addEventListener('click',toggleOverdueDetails);
       el('toggleMappedDetailsBtn').addEventListener('click',toggleMappedDetails);
       document.querySelectorAll('.facility-type-btn').forEach(btn => btn.addEventListener('click', () => setFacilityTypeFilter(btn.dataset.facilityType || 'all')));
       document.querySelectorAll('.overdue-age-btn').forEach(btn => btn.addEventListener('click', () => setOverdueAgeFilter(btn.dataset.overdueAge || 'all')));
+      el('tempUserBtn').addEventListener('click',openTempUserModal);
       el('customerDetailsBtn').addEventListener('click',openCustomerModal);
       el('historyBtn').addEventListener('click',openHistoryModal);
       el('editDetailsBtn').addEventListener('click',openEditAccessModal);
+      el('tempUserModalClose').addEventListener('click',closeTempUserModal);
       el('customerModalClose').addEventListener('click',closeCustomerModal);
       el('historyModalClose').addEventListener('click',closeHistoryModal);
       el('editAccessModalClose').addEventListener('click',closeEditAccessModal);
@@ -1272,11 +1538,13 @@
       el('customerAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('customerUnlockBtn').click(); } });
       el('historyAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('historyUnlockBtn').click(); } });
       el('editAccessCodeInput').addEventListener('keydown', (event) => { if(event.key === 'Enter'){ event.preventDefault(); unlockEdit(); } });
+      el('tempUserModalBackdrop').addEventListener('click', (event) => { if(event.target === el('tempUserModalBackdrop')) closeTempUserModal(); });
       el('customerModalBackdrop').addEventListener('click', (event) => { if(event.target === el('customerModalBackdrop')) closeCustomerModal(); });
       el('historyModalBackdrop').addEventListener('click', (event) => { if(event.target === el('historyModalBackdrop')) closeHistoryModal(); });
       el('editAccessModalBackdrop').addEventListener('click', (event) => { if(event.target === el('editAccessModalBackdrop')) closeEditAccessModal(); });
       el('editModalBackdrop').addEventListener('click', (event) => { if(event.target === el('editModalBackdrop')) closeEditModal(); });
       window.addEventListener('keydown', (event) => {
+        if(event.key === 'Escape' && !el('tempUserModalBackdrop').classList.contains('hidden')) closeTempUserModal();
         if(event.key === 'Escape' && !el('customerModalBackdrop').classList.contains('hidden')) closeCustomerModal();
         if(event.key === 'Escape' && !el('historyModalBackdrop').classList.contains('hidden')) closeHistoryModal();
         if(event.key === 'Escape' && !el('editAccessModalBackdrop').classList.contains('hidden')) closeEditAccessModal();
@@ -1438,6 +1706,7 @@
     function renderDetail(){
       _origRenderDetail();
       const rec = selectedRecord();
+      updateTempUserButton(rec);
       if(!rec) return;
       const key = noteKey(rec);
       renderNotes();
