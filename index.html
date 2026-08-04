@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Internal Mooring App - Leaflet Live (Inspection Join + Customer Gate)</title>
+  <title>Moorings Database</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <style>
     :root { --bg:#f8fafc; --card:#fff; --text:#0f172a; --muted:#64748b; --line:#e2e8f0; --primary:#0f172a; --primary-soft:#e0f2fe; --shadow:0 8px 22px rgba(15,23,42,.06); --radius:20px; --danger:#b91c1c; --danger-soft:#fee2e2; --danger-pin:#dc2626; --terminated:#475569; --terminated-soft:#f1f5f9; --location:#2563eb; }
@@ -205,6 +205,11 @@
       .table-wrap{width:100%;overflow-x:auto}
       table{min-width:600px}
     }
+
+    :root{--primary:#091b2e;--cyan:#22d3ee;--bg:#eef3f8;--card:#fff;--text:#0b1f35;--muted:#61758a;--line:#d9e4ed;--shadow:0 16px 45px rgba(6,17,31,.11)}
+    body{background:linear-gradient(180deg,#06111f 0,#0a192b 320px,#eef3f8 320px);min-height:100vh}.header{padding:18px 20px;background:rgba(8,24,42,.9);border:1px solid rgba(255,255,255,.14);border-radius:24px}.header h1{color:#fff}.header h1:before{content:"HM";display:inline-grid;place-items:center;width:42px;height:42px;margin-right:12px;border-radius:13px;background:#22d3ee;color:#062136;font-size:13px;vertical-align:5px}.header button{background:#192c41;color:#fff;border-color:#405269}.header .primary{background:#25bff0;color:#062136}.card{box-shadow:var(--shadow)}.stat-card{border-left:4px solid #22d3ee}.detail-card>.panel-head{background:#0a192b;padding-bottom:18px}.detail-card>.panel-head .panel-title{color:#fff}.detail-panel-head{display:flex;justify-content:space-between;align-items:center}.is-loading{font-size:0!important;height:32px}.is-loading:after{content:"";display:block;width:58px;height:22px;border-radius:8px;background:linear-gradient(90deg,#dbe7ef,#fff,#dbe7ef);background-size:200%;animation:sh 1s linear infinite}@keyframes sh{to{background-position:-200%}}
+    body.full-map-open{overflow:hidden}body.full-map-open .map-col{position:fixed;inset:0;z-index:6500;background:#06111f}body.full-map-open .map-col>.card,body.full-map-open .map-col .panel-body{height:100dvh;padding:0;border:0;border-radius:0}body.full-map-open .map-col .panel-head,body.full-map-open .legend,body.full-map-open .table-wrap{display:none}body.full-map-open #map{height:100dvh!important;min-height:100dvh!important;border:0;border-radius:0}body.full-map-open .map-actions{position:fixed;right:12px;top:12px;z-index:6800}body.full-map-open #refreshLocationCacheBtn{display:none}body.full-map-open:not(.full-map-detail) .detail-col{display:none}body.full-map-detail .detail-col{display:block;position:fixed;inset:0;z-index:7000;background:rgba(3,12,23,.72)}body.full-map-detail .detail-card{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);max-height:90dvh;overflow:auto;border-radius:24px 24px 0 0}body.full-map-detail #backToMapBtn{display:block!important;background:#22d3ee;color:#062136}
+    @media(max-width:760px){.container{padding:12px}.header{padding:14px}.header .actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.header .actions button{width:100%;min-height:46px}.stats{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;overflow:visible!important;margin:0 0 12px!important;gap:8px}.stat-card{min-width:0!important;padding:12px 10px!important}.stat-card .icon-box{width:32px;height:32px;min-width:32px}.stat-card .stat-value{font-size:23px}.stat-card .stat-label{font-size:9px}.stat-card .stat-sub{font-size:9px}.stat-card button{width:100%;font-size:10px;padding:7px}.main-grid{display:flex;flex-direction:column}.map-col{order:1}.detail-col{order:2}#map{height:58vh}.modal-backdrop{align-items:flex-end;padding:0}.modal-card{width:100%!important;border-radius:24px 24px 0 0}}
   </style>
 </head>
 <body>
@@ -214,7 +219,7 @@
         <div class="badges">
       
         </div>
-        <h1>Internal Mooring App </h1>
+        <h1>Moorings Database</h1>
         <div class="subtitle"></div>
       </div>
       <div class="actions">
@@ -248,6 +253,7 @@
           <div class="panel-body">
             <div id="map"></div>
             <div class="map-actions">
+              <button class="primary" id="fullMapBtn" type="button">Full Screen</button>
               <button class="primary" id="refreshLocationCacheBtn" type="button" title="Admin: refresh cached pin GPS from ArcGIS into Supabase">Refresh Location Cache</button>
             </div>
             <div class="legend" id="legend"></div>
@@ -271,7 +277,7 @@
       </div>
       <div class="detail-col">
         <div class="card detail-card">
-          <div class="panel-head"><h2 class="panel-title">Detail Information</h2><div class="panel-desc"></div></div>
+          <div class="panel-head detail-panel-head"><h2 class="panel-title">Mooring Detail</h2><button id="backToMapBtn" class="small hidden">Back to map</button></div>
           <div class="panel-body">
             <div id="detailEmpty" class="muted-box">Select a pin or a table row to view the mooring details.</div>
             <div id="detailContent" class="hidden">
@@ -501,10 +507,8 @@
       { key: 'mooring_permit_date_of_termination', label: 'Mooring Permit Date Of Termination' },
       { key: 'mooring_faclity_type_code', label: 'Mooring Facility Type Code' }
     ];
+    const TABLE_FIRST_PAINT_ROWS=200, TABLE_CHUNK_ROWS=250; let tableRenderToken=0, registryReady=false, firstPaintDone=false;
     const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false, overdueAgeFilter: 'all', facilityTypeFilter: 'all', tempUserFilter: 'all' };
-    const TABLE_FIRST_PAINT_ROWS = 200;
-    const TABLE_CHUNK_ROWS = 250;
-    let tableRenderToken = 0;
     const registryByCode = new Map();
     const customerDetailsCache = new Map();
     const historyDetailsCache = new Map();
@@ -1404,8 +1408,7 @@
     }
 
     async function loadRegistryData(){
-      registryByCode.clear();
-      tempUserByCode.clear();
+      registryByCode.clear(); tempUserByCode.clear();
       if(!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY'){
         showError('Supabase URL and anon key placeholders are still in this file. Fill them in to load registry data. The map can still load from ArcGIS.');
         state.registryLoaded = 0;
@@ -1431,11 +1434,8 @@
               const existing = registryByCode.get(key) || null;
               registryByCode.set(key, chooseRegistryRow(existing, row));
               matchedRows += 1;
-              const tempRow = normaliseTempUserRow(rawRow);
-              if(hasOccupiedDate(tempRow.occupied_date)){
-                if(!tempUserByCode.has(key)) tempUserByCode.set(key, []);
-                tempUserByCode.get(key).push(tempRow);
-              }
+              const tempRow=normaliseTempUserRow(rawRow);
+              if(hasOccupiedDate(tempRow.occupied_date)){ if(!tempUserByCode.has(key)) tempUserByCode.set(key,[]); tempUserByCode.get(key).push(tempRow); }
             }
             loaded += 1;
           });
@@ -1474,7 +1474,7 @@
         state.records = rows;
         state.selectedId = rows[0]?.id || null;
         state.fetchedAt = new Date();
-        renderAll(true,true,false);
+        if(registryReady) renderAll(true,true,false); else renderLocationFirstPaint();
       } catch(err){
         console.error(err);
         showError('Unable to load mooring location data. Check Supabase location cache table, RLS SELECT policy, and ArcGIS fallback service. ' + (err?.message || ''));
@@ -1483,11 +1483,10 @@
     }
     async function loadAllData(){
       showError('');
-      if(!supabaseClient && SUPABASE_URL && SUPABASE_ANON_KEY){
-        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      }
-      await Promise.all([loadRegistryData(), loadLiveData()]);
-      renderAll(true, false, false);
+      if(!supabaseClient) supabaseClient=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+      await Promise.all([loadRegistryData(),loadLiveData()]);
+      registryReady=true; el('statOverdueInspection').classList.remove('is-loading');
+      renderAll(true,!firstPaintDone,false);
     }
 
     function currentFilters(){
@@ -1625,8 +1624,8 @@
       const bounds=[];
       state.filtered.forEach((r)=>{
         const marker=createMooringMarker(r);
-        marker.bindPopup(() => popupHtml(r));
-        marker.on('click',()=> selectRecordById(r.id, false));
+        marker.bindPopup(()=>popupHtml(r));
+        marker.on('click',()=>{ selectRecordById(r.id,false); if(document.body.classList.contains('full-map-open')) openFullMapDetail(); });
         state.markers[r.id]=marker;
         state.layerGroup.addLayer(marker);
         bounds.push([r.lat,r.lon]);
@@ -1651,40 +1650,8 @@
         <div class="legend-item"><span class="legend-dot" style="background:${USER_LOCATION_COLOR}"></span><span>Current location</span></div>`;
     }
 
-    function tableRowHtml(r){
-      const active = state.selectedId===r.id ? 'active' : '';
-      const mergedBoatName = effectiveBoatName(r);
-      const mergedInspectionDate = effectiveInspectionDate(r);
-      const stale = isRecordInspectionStale(r);
-      return `<tr class="${active}" data-id="${escapeHtml(r.id)}">
-        <td><strong>${escapeHtml(r.mooringCode || '-')}</strong></td>
-        <td>${escapeHtml(mergedBoatName || '-')}</td>
-        <td>${escapeHtml(r.mooringLength || '-')}</td>
-        <td>${stale ? `<span class="alert-text">${escapeHtml(mergedInspectionDate || '-')}</span>` : escapeHtml(mergedInspectionDate || '-')}</td>
-        <td>${typeof r.lat==='number' ? r.lat.toFixed(7) : '-'}</td>
-        <td>${typeof r.lon==='number' ? r.lon.toFixed(7) : '-'}</td>
-      </tr>`;
-    }
-    function renderTable(){
-      const tbody = el('tableBody');
-      const token = ++tableRenderToken;
-      if(!state.filtered.length){
-        tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#64748b;padding:40px 16px;">No mooring rows are currently visible.</td></tr>';
-        return;
-      }
-      const rows = state.filtered.slice();
-      const firstEnd = Math.min(TABLE_FIRST_PAINT_ROWS, rows.length);
-      tbody.innerHTML = rows.slice(0, firstEnd).map(tableRowHtml).join('');
-      let cursor = firstEnd;
-      const appendChunk = () => {
-        if(token !== tableRenderToken || cursor >= rows.length) return;
-        const end = Math.min(cursor + TABLE_CHUNK_ROWS, rows.length);
-        tbody.insertAdjacentHTML('beforeend', rows.slice(cursor, end).map(tableRowHtml).join(''));
-        cursor = end;
-        if(cursor < rows.length) requestAnimationFrame(appendChunk);
-      };
-      if(cursor < rows.length) requestAnimationFrame(appendChunk);
-    }
+    function tableRowHtml(r){const a=state.selectedId===r.id?'active':'';const b=effectiveBoatName(r),d=effectiveInspectionDate(r),x=isRecordInspectionStale(r);return `<tr class="${a}" data-id="${escapeHtml(r.id)}"><td><strong>${escapeHtml(r.mooringCode||'-')}</strong></td><td>${escapeHtml(b||'-')}</td><td>${escapeHtml(r.mooringLength||'-')}</td><td>${x?`<span class="alert-text">${escapeHtml(d||'-')}</span>`:escapeHtml(d||'-')}</td><td>${typeof r.lat==='number'?r.lat.toFixed(7):'-'}</td><td>${typeof r.lon==='number'?r.lon.toFixed(7):'-'}</td></tr>`;}
+    function renderTable(){const t=el('tableBody'),token=++tableRenderToken;if(!state.filtered.length){t.innerHTML='<tr><td colspan="6" style="text-align:center;padding:40px">No mooring rows are currently visible.</td></tr>';return}const rows=state.filtered.slice(),n=Math.min(TABLE_FIRST_PAINT_ROWS,rows.length);t.innerHTML=rows.slice(0,n).map(tableRowHtml).join('');let i=n;const add=()=>{if(token!==tableRenderToken||i>=rows.length)return;const e=Math.min(i+TABLE_CHUNK_ROWS,rows.length);t.insertAdjacentHTML('beforeend',rows.slice(i,e).map(tableRowHtml).join(''));i=e;if(i<rows.length)requestAnimationFrame(add)};if(i<rows.length)requestAnimationFrame(add)}
     function _origRenderDetail(){
       const rec=selectedRecord();
       const empty=el('detailEmpty');
@@ -1753,20 +1720,13 @@
         maximumAge: 30000
       });
     }
-    function selectRecordById(id, autoFocus=false){
-      const previousId = state.selectedId;
-      state.selectedId = id;
-      const previous = state.filtered.find(r => String(r.id) === String(previousId));
-      const current = selectedRecord();
-      if(previous && state.markers[previous.id]) updateMarkerSelection(state.markers[previous.id], previous, false);
-      if(current && state.markers[current.id]) updateMarkerSelection(state.markers[current.id], current, true);
-      const oldRow = el('tableBody').querySelector('tr.active');
-      if(oldRow) oldRow.classList.remove('active');
-      const newRow = Array.from(el('tableBody').querySelectorAll('tr[data-id]')).find(tr => String(tr.dataset.id) === String(id));
-      if(newRow) newRow.classList.add('active');
-      renderDetail();
-      if(autoFocus && current) focusSelectedMarker(true);
-    }
+    function selectRecordById(id,focus=false){const old=selectedRecord();state.selectedId=id;const cur=selectedRecord();if(old&&state.markers[old.id])updateMarkerSelection(state.markers[old.id],old,false);if(cur&&state.markers[cur.id])updateMarkerSelection(state.markers[cur.id],cur,true);renderDetail();if(focus&&cur)focusSelectedMarker(true)}
+    function enterFullMap(){document.body.classList.add('full-map-open');el('fullMapBtn').textContent='Exit Full Screen';setTimeout(()=>map.invalidateSize(),50)}
+    function exitFullMap(){document.body.classList.remove('full-map-open','full-map-detail');el('fullMapBtn').textContent='Full Screen';setTimeout(()=>map.invalidateSize(),50)}
+    function toggleFullMap(){document.body.classList.contains('full-map-open')?exitFullMap():enterFullMap()}
+    function openFullMapDetail(){document.body.classList.add('full-map-detail');renderDetail()}
+    function backToFullMap(){document.body.classList.remove('full-map-detail');setTimeout(()=>map.invalidateSize(),30)}
+    function renderLocationFirstPaint(){applyFilters();el('statMapped').textContent=state.filtered.length;el('statOverdueInspection').textContent='';el('statOverdueInspection').classList.add('is-loading');renderMap(true);renderTable();renderDetail();firstPaintDone=true}
     function renderAll(reapplyFilters=true, resetBounds=false, autoFocus=false){
       if(reapplyFilters) applyFilters();
       renderStats();
@@ -1799,22 +1759,13 @@
     function fitAllPins(){ if(!state.filtered.length) return; map.fitBounds(state.filtered.map(r => [r.lat,r.lon]), { padding:[24,24] }); }
 
     function initEvents(){
-      el('tableBody').addEventListener('click', (event) => {
-        const row = event.target.closest('tr[data-id]');
-        if(row) selectRecordById(row.dataset.id, true);
-      });
-      let filterTimer = null;
-      const scheduleFilterRender = () => {
-        clearTimeout(filterTimer);
-        filterTimer = setTimeout(() => renderAll(true,false,true), 180);
-      };
-      el('f_mooringCode').addEventListener('input', scheduleFilterRender);
-      el('f_boatName').addEventListener('input', scheduleFilterRender);
+      el('tableBody').addEventListener('click',e=>{const r=e.target.closest('tr[data-id]');if(r)selectRecordById(r.dataset.id,true)}); let ft; const sf=()=>{clearTimeout(ft);ft=setTimeout(()=>renderAll(true,false,true),180)};
+      el('f_mooringCode').addEventListener('input',sf); el('f_boatName').addEventListener('input',sf);
       el('resetFiltersBtn').addEventListener('click',resetFilters);
       el('fitAllBtn').addEventListener('click',fitAllPins);
       el('currentLocationBtn').addEventListener('click',showCurrentLocation);
       el('vesselSearchBtn').addEventListener('click',openVesselSearch);
-      el('refreshLocationCacheBtn').addEventListener('click',refreshLocationCacheFromArcGIS);
+      el('fullMapBtn').addEventListener('click',toggleFullMap); el('backToMapBtn').addEventListener('click',backToFullMap); el('refreshLocationCacheBtn').addEventListener('click',refreshLocationCacheFromArcGIS);
       el('overdueOnlyBtn').addEventListener('click',toggleOverdueOnly);
       el('toggleOverdueDetailsBtn').addEventListener('click',toggleOverdueDetails);
       el('toggleMappedDetailsBtn').addEventListener('click',toggleMappedDetails);
