@@ -502,6 +502,9 @@
       { key: 'mooring_faclity_type_code', label: 'Mooring Facility Type Code' }
     ];
     const state = { records: [], filtered: [], selectedId: null, markers: {}, layerGroup: null, fetchedAt: null, registryLoaded: 0, overdueOnly: false, overdueAgeFilter: 'all', facilityTypeFilter: 'all', tempUserFilter: 'all' };
+    const TABLE_FIRST_PAINT_ROWS = 200;
+    const TABLE_CHUNK_ROWS = 250;
+    let tableRenderToken = 0;
     const registryByCode = new Map();
     const customerDetailsCache = new Map();
     const historyDetailsCache = new Map();
@@ -1304,7 +1307,7 @@
       while(true){
         const { data, error } = await supabaseClient
           .from(SUPABASE_LOCATION_TABLE)
-          .select('*')
+          .select('source_objectid,mooring_code,mooring_length,mooring_depth,tag_number,boat_name,zone_name,latitude,longitude')
           .range(from, from + pageSize - 1);
         if(error) throw error;
         if(!data || !data.length) break;
@@ -1402,6 +1405,7 @@
 
     async function loadRegistryData(){
       registryByCode.clear();
+      tempUserByCode.clear();
       if(!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL === 'YOUR_SUPABASE_URL' || SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY'){
         showError('Supabase URL and anon key placeholders are still in this file. Fill them in to load registry data. The map can still load from ArcGIS.');
         state.registryLoaded = 0;
@@ -1427,6 +1431,11 @@
               const existing = registryByCode.get(key) || null;
               registryByCode.set(key, chooseRegistryRow(existing, row));
               matchedRows += 1;
+              const tempRow = normaliseTempUserRow(rawRow);
+              if(hasOccupiedDate(tempRow.occupied_date)){
+                if(!tempUserByCode.has(key)) tempUserByCode.set(key, []);
+                tempUserByCode.get(key).push(tempRow);
+              }
             }
             loaded += 1;
           });
@@ -1474,9 +1483,11 @@
     }
     async function loadAllData(){
       showError('');
-      await loadRegistryData();
-      await loadTempUserData();
-      await loadLiveData();
+      if(!supabaseClient && SUPABASE_URL && SUPABASE_ANON_KEY){
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+      await Promise.all([loadRegistryData(), loadLiveData()]);
+      renderAll(true, false, false);
     }
 
     function currentFilters(){
@@ -1614,8 +1625,8 @@
       const bounds=[];
       state.filtered.forEach((r)=>{
         const marker=createMooringMarker(r);
-        marker.bindPopup(popupHtml(r));
-        marker.on('click',()=>{ state.selectedId=r.id; renderAll(false,false,false); });
+        marker.bindPopup(() => popupHtml(r));
+        marker.on('click',()=> selectRecordById(r.id, false));
         state.markers[r.id]=marker;
         state.layerGroup.addLayer(marker);
         bounds.push([r.lat,r.lon]);
@@ -1640,29 +1651,40 @@
         <div class="legend-item"><span class="legend-dot" style="background:${USER_LOCATION_COLOR}"></span><span>Current location</span></div>`;
     }
 
+    function tableRowHtml(r){
+      const active = state.selectedId===r.id ? 'active' : '';
+      const mergedBoatName = effectiveBoatName(r);
+      const mergedInspectionDate = effectiveInspectionDate(r);
+      const stale = isRecordInspectionStale(r);
+      return `<tr class="${active}" data-id="${escapeHtml(r.id)}">
+        <td><strong>${escapeHtml(r.mooringCode || '-')}</strong></td>
+        <td>${escapeHtml(mergedBoatName || '-')}</td>
+        <td>${escapeHtml(r.mooringLength || '-')}</td>
+        <td>${stale ? `<span class="alert-text">${escapeHtml(mergedInspectionDate || '-')}</span>` : escapeHtml(mergedInspectionDate || '-')}</td>
+        <td>${typeof r.lat==='number' ? r.lat.toFixed(7) : '-'}</td>
+        <td>${typeof r.lon==='number' ? r.lon.toFixed(7) : '-'}</td>
+      </tr>`;
+    }
     function renderTable(){
       const tbody = el('tableBody');
+      const token = ++tableRenderToken;
       if(!state.filtered.length){
         tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:#64748b;padding:40px 16px;">No mooring rows are currently visible.</td></tr>';
         return;
       }
-      tbody.innerHTML = state.filtered.map(r=>{
-        const active = state.selectedId===r.id ? 'active' : '';
-        const mergedBoatName = effectiveBoatName(r);
-        const mergedInspectionDate = effectiveInspectionDate(r);
-        const stale = isRecordInspectionStale(r);
-        return `<tr class="${active}" data-id="${escapeHtml(r.id)}">
-          <td><strong>${escapeHtml(r.mooringCode || '-')}</strong></td>
-          <td>${escapeHtml(mergedBoatName || '-')}</td>
-          <td>${escapeHtml(r.mooringLength || '-')}</td>
-          <td>${stale ? `<span class="alert-text">${escapeHtml(mergedInspectionDate || '-')}</span>` : escapeHtml(mergedInspectionDate || '-')}</td>
-          <td>${typeof r.lat==='number' ? r.lat.toFixed(7) : '-'}</td>
-          <td>${typeof r.lon==='number' ? r.lon.toFixed(7) : '-'}</td>
-        </tr>`;
-      }).join('');
-      tbody.querySelectorAll('tr[data-id]').forEach(tr => tr.addEventListener('click',()=>{ state.selectedId=tr.dataset.id; renderAll(false,false,true); }));
+      const rows = state.filtered.slice();
+      const firstEnd = Math.min(TABLE_FIRST_PAINT_ROWS, rows.length);
+      tbody.innerHTML = rows.slice(0, firstEnd).map(tableRowHtml).join('');
+      let cursor = firstEnd;
+      const appendChunk = () => {
+        if(token !== tableRenderToken || cursor >= rows.length) return;
+        const end = Math.min(cursor + TABLE_CHUNK_ROWS, rows.length);
+        tbody.insertAdjacentHTML('beforeend', rows.slice(cursor, end).map(tableRowHtml).join(''));
+        cursor = end;
+        if(cursor < rows.length) requestAnimationFrame(appendChunk);
+      };
+      if(cursor < rows.length) requestAnimationFrame(appendChunk);
     }
-
     function _origRenderDetail(){
       const rec=selectedRecord();
       const empty=el('detailEmpty');
@@ -1731,6 +1753,20 @@
         maximumAge: 30000
       });
     }
+    function selectRecordById(id, autoFocus=false){
+      const previousId = state.selectedId;
+      state.selectedId = id;
+      const previous = state.filtered.find(r => String(r.id) === String(previousId));
+      const current = selectedRecord();
+      if(previous && state.markers[previous.id]) updateMarkerSelection(state.markers[previous.id], previous, false);
+      if(current && state.markers[current.id]) updateMarkerSelection(state.markers[current.id], current, true);
+      const oldRow = el('tableBody').querySelector('tr.active');
+      if(oldRow) oldRow.classList.remove('active');
+      const newRow = Array.from(el('tableBody').querySelectorAll('tr[data-id]')).find(tr => String(tr.dataset.id) === String(id));
+      if(newRow) newRow.classList.add('active');
+      renderDetail();
+      if(autoFocus && current) focusSelectedMarker(true);
+    }
     function renderAll(reapplyFilters=true, resetBounds=false, autoFocus=false){
       if(reapplyFilters) applyFilters();
       renderStats();
@@ -1763,8 +1799,17 @@
     function fitAllPins(){ if(!state.filtered.length) return; map.fitBounds(state.filtered.map(r => [r.lat,r.lon]), { padding:[24,24] }); }
 
     function initEvents(){
-      el('f_mooringCode').addEventListener('input',()=>renderAll(true,false,true));
-      el('f_boatName').addEventListener('input',()=>renderAll(true,false,true));
+      el('tableBody').addEventListener('click', (event) => {
+        const row = event.target.closest('tr[data-id]');
+        if(row) selectRecordById(row.dataset.id, true);
+      });
+      let filterTimer = null;
+      const scheduleFilterRender = () => {
+        clearTimeout(filterTimer);
+        filterTimer = setTimeout(() => renderAll(true,false,true), 180);
+      };
+      el('f_mooringCode').addEventListener('input', scheduleFilterRender);
+      el('f_boatName').addEventListener('input', scheduleFilterRender);
       el('resetFiltersBtn').addEventListener('click',resetFilters);
       el('fitAllBtn').addEventListener('click',fitAllPins);
       el('currentLocationBtn').addEventListener('click',showCurrentLocation);
