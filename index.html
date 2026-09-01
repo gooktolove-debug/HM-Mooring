@@ -605,12 +605,14 @@
     // Supabase configuration
     // Replace these placeholders before publishing.
     // =========================
-    const SUPABASE_URL = 'https://hjrcnsuzrztaiwnttxnr.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_8vscwHQ7y50eUj-RywvmLQ_JGpSp2HE';
-    const SUPABASE_PUBLIC_TABLE = 'mooring_registry_import_stg';
-    const SUPABASE_CUSTOMER_TABLE = 'mooring_registry_join_current';
-    const SUPABASE_LOCATION_TABLE = 'mooring_locations_cache';
-    const SUPABASE_TEMP_USER_TABLE = 'mooring_registry_import_stg';
+    const SUPABASE_URL = 'https://wgwlnutnstrfuiiunlcu.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_iC7kbinoy61_5eQCnrV25Q_OioA7Y1x';
+    const SUPABASE_PUBLIC_TABLE = 'mooring_app_registry_import_stg';
+    const SUPABASE_CUSTOMER_TABLE = 'mooring_app_registry_join_current';
+    const SUPABASE_LOCATION_TABLE = 'mooring_app_locations_cache';
+    const SUPABASE_TEMP_USER_TABLE = 'mooring_app_registry_import_stg';
+    const QUICK_HANDLER_BASE_URL = 'https://hjrcnsuzrztaiwnttxnr.supabase.co';
+    const QUICK_HANDLER_ANON_KEY = 'sb_publishable_8vscwHQ7y50eUj-RywvmLQ_JGpSp2HE';
 
     // Customer details gate
     const EDIT_ACCESS_CODE = 'akhmmr';
@@ -1157,12 +1159,12 @@
       if (!key) return null;
       if (customerDetailsCache.has(key)) return customerDetailsCache.get(key);
 
-      const functionUrl = `${SUPABASE_URL}/functions/v1/quick-handler`;
+      const functionUrl = `${QUICK_HANDLER_BASE_URL}/functions/v1/quick-handler`;
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
+          'apikey': QUICK_HANDLER_ANON_KEY,
         },
         body: JSON.stringify({
           mooring_code: key,
@@ -1242,12 +1244,12 @@
       const key = normalizeCode(mooringCode);
       if (!key) return [];
       if (historyDetailsCache.has(key)) return historyDetailsCache.get(key);
-      const functionUrl = `${SUPABASE_URL}/functions/v1/quick-handler`;
+      const functionUrl = `${QUICK_HANDLER_BASE_URL}/functions/v1/quick-handler`;
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
+          'apikey': QUICK_HANDLER_ANON_KEY,
         },
         body: JSON.stringify({
           mooring_code: key,
@@ -2024,7 +2026,7 @@
     // Tables : mooring_notes, mooring_photos
     // Bucket : mooring-photos
     // ─────────────────────────────────────────────
-    const NOTES_TABLE  = 'mooring_notes';
+    const NOTES_TABLE  = 'mooring_app_notes';
     // SharePoint — 알파벳 대분류별 폴더 매핑
     const SP_ROOT = 'https://aucklandtransport.sharepoint.com/sites/ahmfs';
     function spFolderUrl(mooringCode){
