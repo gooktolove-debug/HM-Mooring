@@ -614,8 +614,20 @@
     const QUICK_HANDLER_BASE_URL = 'https://hjrcnsuzrztaiwnttxnr.supabase.co';
     const QUICK_HANDLER_ANON_KEY = 'sb_publishable_8vscwHQ7y50eUj-RywvmLQ_JGpSp2HE';
 
-    // Customer details gate
-    const EDIT_ACCESS_CODE = 'akhmmr';
+    // Server-side access verification. No real access code is stored in this HTML.
+    const ACCESS_FUNCTION_URL = 'https://hjrcnsuzrztaiwnttxnr.supabase.co/functions/v1/verify-access';
+    const ACCESS_APP_NAME = 'mooring';
+    let sharedAccessCode = '';
+    async function verifyProtectedAccessCode(code){
+      const normalized=String(code??'').trim();
+      if(normalized.length<5)return{valid:false,message:'Please enter a valid access code.'};
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+      try{const response=await fetch(ACCESS_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:ACCESS_APP_NAME,code:normalized}),signal:controller.signal});
+        const payload=await response.json();
+        if(!response.ok||payload?.valid!==true)return{valid:false,message:payload?.message||payload?.error||'Incorrect access code.'};
+        sharedAccessCode=normalized;return{valid:true};
+      }finally{clearTimeout(timer)}
+    }
     const EDIT_FIELDS = [
       { key: 'mooring_code', label: 'Mooring Code', required: true },
       { key: 'mooring_length', label: 'Mooring Length', type: 'number', step: 'any' },
@@ -953,13 +965,7 @@
       setTimeout(() => el('tempUserAccessCodeInput')?.focus(), 0);
     }
     function closeTempUserAccessModal(){ el('tempUserAccessModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
-    function unlockTempUserAccess(){
-      const code = el('tempUserAccessCodeInput').value.trim();
-      if(code !== EDIT_ACCESS_CODE){ el('tempUserAccessCodeError').classList.remove('hidden'); el('tempUserAccessCodeInput').focus(); return; }
-      grantSharedAccess();
-      closeTempUserAccessModal();
-      openTempUserModal();
-    }
+    async function unlockTempUserAccess(){const input=el('tempUserAccessCodeInput'),errorEl=el('tempUserAccessCodeError');try{const result=await verifyProtectedAccessCode(input.value);if(!result.valid){errorEl.textContent=result.message;errorEl.classList.remove('hidden');return}errorEl.classList.add('hidden');grantSharedAccess();closeTempUserAccessModal();openTempUserModal()}catch(err){errorEl.textContent='Unable to verify access: '+(err?.message||err);errorEl.classList.remove('hidden')}}
     function openTempUserProtected(){
       const rec = selectedRecord();
       if(!rec) return;
@@ -1143,7 +1149,7 @@
       el('customerModalBackdrop').classList.remove('hidden');
       lockBodyScroll();
       if(sharedAccessGranted || customerAccessGranted){
-        showCustomerDetailsForRecord(rec, EDIT_ACCESS_CODE);
+        showCustomerDetailsForRecord(rec, sharedAccessCode);
       } else {
         resetCustomerModalState();
         el('customerAccessCodeInput').focus();
@@ -1186,11 +1192,10 @@
       el('customerGateView').classList.add('hidden');
       el('customerLoadingView').classList.remove('hidden');
       try {
-        const rowFromFunction = await fetchCustomerDetailsByCode(rec.mooringCode, accessCode || EDIT_ACCESS_CODE);
         const registryRows = await fetchRegistryRowsByCode(rec.mooringCode);
         const selectedIssue = String(getRegistryExtra(rec.mooringCode)?.mooring_permit_date_of_issue || '').trim();
         const registryFallback = registryRows.find((r) => String(r.mooring_permit_date_of_issue || '').trim() === selectedIssue) || registryRows[0] || {};
-        const row = { ...(registryFallback || {}), ...(rowFromFunction || {}) };
+        const row = { ...(registryFallback || {}) };
         if(!cleanContactValue(row.customer_phoneah) && !cleanContactValue(row.customer_phonewk)){
           const merged = mergeOtherContactsByIssueDate(row, registryRows);
           row.customer_phoneah = merged.customer_phoneah;
@@ -1210,7 +1215,8 @@
         el('customerLoadingView').classList.add('hidden');
         el('customerDetailsView').classList.remove('hidden');
         el('customerDetailsEmpty').classList.remove('hidden');
-        el('customerDetailsEmpty').textContent = 'Customer details could not be loaded. Check Supabase URL, anon key, customer table name, and SELECT policy.';
+        console.error('Customer details load failed:', err);
+        el('customerDetailsEmpty').textContent = 'Customer details could not be loaded: ' + (err?.message || err || 'Unknown error');
       }
     }
 
@@ -1230,7 +1236,7 @@
       el('historyModalBackdrop').classList.remove('hidden');
       lockBodyScroll();
       if(sharedAccessGranted || historyAccessGranted){
-        showHistoryForRecord(rec, EDIT_ACCESS_CODE);
+        showHistoryForRecord(rec, sharedAccessCode);
       } else {
         resetHistoryModalState();
         el('historyAccessCodeInput').focus();
@@ -1242,36 +1248,27 @@
 
     async function fetchHistoryByCode(mooringCode, accessCode) {
       const key = normalizeCode(mooringCode);
-      if (!key) return [];
-      if (historyDetailsCache.has(key)) return historyDetailsCache.get(key);
-      const functionUrl = `${QUICK_HANDLER_BASE_URL}/functions/v1/quick-handler`;
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': QUICK_HANDLER_ANON_KEY,
-        },
-        body: JSON.stringify({
-          mooring_code: key,
-          access_code: accessCode,
-          mode: 'history'
-        })
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to load history');
+      if(!key) return [];
+      if(historyDetailsCache.has(key)) return historyDetailsCache.get(key);
+      if(!sharedAccessGranted || !sharedAccessCode){
+        throw new Error('Access verification is required before loading history.');
       }
-      const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+      const { data, error } = await supabaseClient
+        .from(SUPABASE_CUSTOMER_TABLE)
+        .select('*')
+        .ilike('mooring_code', key)
+        .order('last_inspection_ts', { ascending:false, nullsFirst:false });
+      if(error) throw error;
+      const rows = data || [];
       historyDetailsCache.set(key, rows);
       return rows;
     }
-
     async function showHistoryForRecord(rec, accessCode = ""){
       resetHistoryModalState();
       el('historyGateView').classList.add('hidden');
       el('historyLoadingView').classList.remove('hidden');
       try {
-        const rowsFromFunction = await fetchHistoryByCode(rec.mooringCode, accessCode || EDIT_ACCESS_CODE);
+        const rowsFromFunction = await fetchHistoryByCode(rec.mooringCode, accessCode || sharedAccessCode);
         const registryRows = await fetchRegistryRowsByCode(rec.mooringCode);
         const rows = (rowsFromFunction || []).map((row) => mergeOtherContactsByIssueDate(row, registryRows));
         el('historyLoadingView').classList.add('hidden');
@@ -1302,7 +1299,7 @@
         el('historyLoadingView').classList.add('hidden');
         el('historyDetailsView').classList.remove('hidden');
         el('historyDetailsEmpty').classList.remove('hidden');
-        el('historyDetailsEmpty').textContent = 'History could not be loaded. Check the access code, Edge Function, and view.';
+        el('historyDetailsEmpty').textContent = 'History could not be loaded: ' + (err?.message || err || 'Unknown error');
       }
     }
 
@@ -1313,7 +1310,7 @@
     function resetEditAccessModalState(){ el('editAccessCodeInput').value = ''; el('editAccessCodeError').classList.add('hidden'); }
     function openEditAccessModal(){ const rec = selectedRecord(); if(!rec) return; if(sharedAccessGranted || editAccessGranted){ openEditModal(); return; } resetEditAccessModalState(); el('editAccessModalBackdrop').classList.remove('hidden'); lockBodyScroll(); setTimeout(() => el('editAccessCodeInput')?.focus(), 0); }
     function closeEditAccessModal(){ el('editAccessModalBackdrop').classList.add('hidden'); unlockBodyScroll(); }
-    function unlockEdit(){ const code = el('editAccessCodeInput').value.trim(); if(code !== EDIT_ACCESS_CODE){ el('editAccessCodeError').classList.remove('hidden'); el('editAccessCodeInput').focus(); return; } grantSharedAccess(); closeEditAccessModal(); openEditModal(); }
+    async function unlockEdit(){const input=el('editAccessCodeInput'),errorEl=el('editAccessCodeError');try{const result=await verifyProtectedAccessCode(input.value);if(!result.valid){errorEl.textContent=result.message;errorEl.classList.remove('hidden');return}errorEl.classList.add('hidden');grantSharedAccess();closeEditAccessModal();openEditModal()}catch(err){errorEl.textContent='Unable to verify access: '+(err?.message||err);errorEl.classList.remove('hidden')}}
     function buildEditRowFromRecord(rec){
       const extra = getRegistryExtra(rec.mooringCode) || {};
       return {
@@ -1336,21 +1333,20 @@
     function setEditStatus(message='', type=''){ const box = el('editStatus'); if(!message){ box.textContent=''; box.className='edit-status hidden'; return; } box.textContent = message; box.className = `edit-status ${type || ''}`; }
     function setEditInputValue(fieldKey, value){ const input = el(`edit_${fieldKey}`); if(input && (input.value === '' || fieldKey.startsWith('customer_'))){ input.value = value ?? ''; } }
     async function hydrateEditCustomerFields(rec){
-      try {
-        setEditStatus('Loading customer details...', '');
-        const rowFromFunction = await fetchCustomerDetailsByCode(rec.mooringCode, EDIT_ACCESS_CODE);
+      try{
         const registryRows = await fetchRegistryRowsByCode(rec.mooringCode);
         const selectedIssue = String(getRegistryExtra(rec.mooringCode)?.mooring_permit_date_of_issue || '').trim();
-        const registryFallback = registryRows.find((r) => String(r.mooring_permit_date_of_issue || '').trim() === selectedIssue) || registryRows[0] || {};
-        const row = { ...(registryFallback || {}), ...(rowFromFunction || {}) };
-        const merged = mergeOtherContactsByIssueDate(row, registryRows);
-        setEditInputValue('customer_name', merged.customer_name || '');
-        setEditInputValue('customer_phone_mob', merged.customer_phone_mob || '');
-        setEditInputValue('customer_phoneah', merged.customer_phoneah || '');
-        setEditInputValue('customer_phonewk', merged.customer_phonewk || '');
-        setEditInputValue('customer_email', merged.customer_email || '');
+        const row = registryRows.find((r) => String(r.mooring_permit_date_of_issue || '').trim() === selectedIssue) || registryRows[0] || {};
+        setEditInputValue('customer_name', row.customer_name || '');
+        setEditInputValue('customer_phone_mob', row.customer_phone_mob || '');
+        setEditInputValue('customer_phoneah', row.customer_phoneah || '');
+        setEditInputValue('customer_phonewk', row.customer_phonewk || '');
+        setEditInputValue('customer_email', row.customer_email || '');
         setEditStatus('', '');
-      } catch(err){ console.warn('Could not prefill customer fields for edit:', err); setEditStatus('Customer details could not be prefilled. You can still enter them manually.', 'error'); }
+      }catch(err){
+        console.error('Could not prefill customer fields from target registry:', err);
+        setEditStatus('Customer details could not be prefilled: ' + (err?.message || err), 'error');
+      }
     }
     function openEditModal(){
       const rec = selectedRecord(); if(!rec) return; const row = buildEditRowFromRecord(rec);
@@ -1972,32 +1968,8 @@
       el('addTempUserBtn').addEventListener('click',openAddTempUserModal);
       el('editCancelBtn').addEventListener('click',closeEditModal);
       el('editForm').addEventListener('submit',saveEditForm);
-      el('customerUnlockBtn').addEventListener('click', async () => {
-        const rec = selectedRecord();
-        if (!rec) return;
-
-        const inputCode = el('customerAccessCodeInput').value.trim();
-        el('customerCodeError').classList.add('hidden');
-        if(inputCode !== EDIT_ACCESS_CODE){
-          el('customerCodeError').classList.remove('hidden');
-          return;
-        }
-        grantSharedAccess();
-        await showCustomerDetailsForRecord(rec, EDIT_ACCESS_CODE);
-      });
-      el('historyUnlockBtn').addEventListener('click', async () => {
-        const rec = selectedRecord();
-        if (!rec) return;
-
-        const inputCode = el('historyAccessCodeInput').value.trim();
-        el('historyCodeError').classList.add('hidden');
-        if(inputCode !== EDIT_ACCESS_CODE){
-          el('historyCodeError').classList.remove('hidden');
-          return;
-        }
-        grantSharedAccess();
-        await showHistoryForRecord(rec, EDIT_ACCESS_CODE);
-      });
+      el('customerUnlockBtn').addEventListener('click', async () => {const rec=selectedRecord();if(!rec)return;const input=el('customerAccessCodeInput'),errorEl=el('customerCodeError');try{const result=await verifyProtectedAccessCode(input.value);if(!result.valid){errorEl.textContent=result.message;errorEl.classList.remove('hidden');return}errorEl.classList.add('hidden');grantSharedAccess();await showCustomerDetailsForRecord(rec,sharedAccessCode)}catch(err){errorEl.textContent='Unable to verify access: '+(err?.message||err);errorEl.classList.remove('hidden')}});
+      el('historyUnlockBtn').addEventListener('click', async () => {const rec=selectedRecord();if(!rec)return;const input=el('historyAccessCodeInput'),errorEl=el('historyCodeError');try{const result=await verifyProtectedAccessCode(input.value);if(!result.valid){errorEl.textContent=result.message;errorEl.classList.remove('hidden');return}errorEl.classList.add('hidden');grantSharedAccess();await showHistoryForRecord(rec,sharedAccessCode)}catch(err){errorEl.textContent='Unable to verify access: '+(err?.message||err);errorEl.classList.remove('hidden')}});
       el('customerLockBtn').addEventListener('click',() => { revokeSharedAccess(); lockCustomerModal(); lockHistoryModal(); });
       el('historyLockBtn').addEventListener('click',() => { revokeSharedAccess(); lockCustomerModal(); lockHistoryModal(); });
       el('customerAccessCodeInput').addEventListener('keydown', async (event) => { if(event.key === 'Enter'){ event.preventDefault(); el('customerUnlockBtn').click(); } });
