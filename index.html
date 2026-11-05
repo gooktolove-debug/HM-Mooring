@@ -333,10 +333,51 @@
     .unified-search-grid{grid-template-columns:1fr!important}.full-screen-search{display:none}.stat-value.is-loading{font-size:0;height:34px}.stat-value.is-loading:after{content:"";display:block;width:58px;height:22px;border-radius:8px;background:linear-gradient(90deg,#dbe7ef,#fff,#dbe7ef);background-size:200%;animation:statShimmer 1.1s linear infinite}@keyframes statShimmer{to{background-position:-200%}}
     body.full-map-open .full-screen-search{display:flex;position:fixed;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:6850;width:min(620px,calc(100vw - 220px));gap:8px;padding:8px;border-radius:16px;background:rgba(6,17,31,.9);box-shadow:0 12px 36px rgba(0,0,0,.3);backdrop-filter:blur(12px)}body.full-map-open .full-screen-search .field{height:44px;min-width:0;background:#fff}body.full-map-open .full-screen-search button{height:44px;background:#22d3ee;color:#062136;border:0}
     @media(max-width:760px){.unified-search-grid{display:block!important}.table-wrap{height:238px!important;max-height:238px!important;overflow:auto!important}body.full-map-open .full-screen-search{top:calc(64px + env(safe-area-inset-top));left:10px;right:10px;transform:none;width:auto;padding:7px}body.full-map-open .full-screen-search .field{height:42px;font-size:12px}body.full-map-open .full-screen-search button{height:42px;min-height:42px;font-size:11px}}
+
+    /* ===== Supabase email OTP authentication ===== */
+    .auth-screen{position:fixed;inset:0;z-index:20000;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(160deg,#071827 0%,#0b2940 55%,#0f3a4d 100%);color:#eaf6ff}
+    .auth-card{width:min(430px,100%);padding:30px;border:1px solid rgba(148,163,184,.28);border-radius:20px;background:rgba(8,31,49,.94);box-shadow:0 24px 70px rgba(0,0,0,.38);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+    .auth-kicker{font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:#5eead4;margin-bottom:12px}
+    .auth-title{margin:0 0 8px;color:#fff;font-size:26px}.auth-copy{margin:0 0 22px;color:#cbd5e1;font-size:14px;line-height:1.55}
+    .auth-label{display:block;font-size:14px;font-weight:700;color:#f1f5f9;margin-top:12px}
+    .auth-input{width:100%;box-sizing:border-box;margin-top:8px;padding:13px 14px;border:1px solid #45657c;border-radius:10px;background:#fff;color:#0f172a;outline:none;font-size:16px}
+    .auth-input:focus{border-color:#2dd4bf;box-shadow:0 0 0 3px rgba(45,212,191,.2)}
+    .auth-button{width:100%;margin-top:16px;padding:13px 16px;border:0;border-radius:10px;background:#2dd4bf;color:#05242b;font-weight:800;cursor:pointer}
+    .auth-button:hover{background:#5eead4}.auth-button:disabled{opacity:.58;cursor:wait}
+    .auth-secondary{width:100%;margin-top:10px;background:transparent;color:#e2e8f0;border-color:#64748b;box-shadow:none}.auth-secondary:hover{background:rgba(255,255,255,.08)}
+    .auth-message{min-height:24px;margin:14px 0 0;color:#e2e8f0;font-size:13px;line-height:1.45}
+    .auth-spinner{width:34px;height:34px;border:4px solid rgba(255,255,255,.25);border-top-color:#5eead4;border-radius:9999px;animation:spin .9s linear infinite}
+    .auth-user{display:inline-flex;align-items:center;max-width:260px;padding:8px 11px;border:1px solid rgba(255,255,255,.15);border-radius:12px;color:#bdf6ff;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #signOutBtn{background:rgba(220,38,38,.16);border-color:rgba(248,113,113,.38);color:#fecaca}
+    #signOutBtn:hover{background:rgba(220,38,38,.28)}
+    @media(max-width:760px){.auth-card{padding:24px 20px}.auth-user{grid-column:1/-1;max-width:none;justify-content:center}.header .actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body>
-  <div class="container">
+
+  <div id="authScreen" class="auth-screen" aria-live="polite">
+    <div id="authChecking" class="auth-spinner" aria-label="Checking access"></div>
+    <form id="authForm" class="auth-card hidden" novalidate>
+      <div class="auth-kicker">Harbour Operations</div>
+      <h1 class="auth-title">Moorings Database access</h1>
+      <div id="authEmailStep">
+        <p class="auth-copy">Enter your registered email address to receive an 8-digit verification code.</p>
+        <label class="auth-label" for="authEmail">Email address</label>
+        <input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="name@example.com" required />
+        <button id="authSendBtn" class="auth-button" type="submit">Send verification code</button>
+      </div>
+      <div id="authOtpStep" class="hidden">
+        <p class="auth-copy">Enter the 8-digit code sent to <strong id="authEmailDisplay"></strong>.</p>
+        <label class="auth-label" for="authOtp">Verification code</label>
+        <input id="authOtp" class="auth-input" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="00000000" maxlength="8" required />
+        <button id="authVerifyBtn" class="auth-button" type="submit">Verify and sign in</button>
+        <button id="authResendBtn" class="auth-secondary" type="button">Resend code</button>
+        <button id="authChangeEmailBtn" class="auth-secondary" type="button">Use a different email address</button>
+      </div>
+      <p id="authMessage" class="auth-message" role="status"></p>
+    </form>
+  </div>
+  <div id="appShell" class="container hidden">
     <div class="header">
       <div>
         <div class="badges">
@@ -346,10 +387,12 @@
         <div class="subtitle"></div>
       </div>
       <div class="actions">
+        <span id="authUserEmail" class="auth-user hidden" title="Signed-in account"></span>
         <button class="primary" id="vesselSearchBtn" type="button" title="Open Vessel Search in a new window">Vessel Search</button>
         <button id="resetFiltersBtn">Reset Filters</button>
         <button id="fitAllBtn">Zoom out to All Pins</button>
           <button id="currentLocationBtn" class="pink" type="button">Current Location</button>
+        <button id="signOutBtn" type="button">Sign out</button>
       </div>
     </div>
 
@@ -2163,17 +2206,80 @@
     window.addEventListener('resize', () => map.invalidateSize());
 
     document.addEventListener('click', (event) => { if(event.target && event.target.id === 'editDetailsBtn') openEditAccessModal(); });
-    initEvents();
-
-    // Notes events
-    el('noteAddBtn').addEventListener('click', addNote);
-    el('noteInput').addEventListener('keydown', (e) => {
-      if(e.ctrlKey && e.key === 'Enter'){ e.preventDefault(); addNote(); }
-    });
-
-    // Photos: SharePoint link — no upload events needed
-
-    loadAllData();
+    let mooringAppStarted = false;
+    let authEmailValue = '';
+    function setAuthBusy(busy, text=''){
+      ['authSendBtn','authVerifyBtn','authResendBtn','authChangeEmailBtn'].forEach((id)=>{ const node=el(id); if(node) node.disabled=busy; });
+      if(text) el('authMessage').textContent=text;
+    }
+    function showAuthStep(step){
+      const otpStep = step === 'otp';
+      el('authEmailStep').classList.toggle('hidden', otpStep);
+      el('authOtpStep').classList.toggle('hidden', !otpStep);
+      el('authMessage').textContent='';
+      setTimeout(()=>el(otpStep ? 'authOtp' : 'authEmail')?.focus(),0);
+    }
+    async function sendAuthOtp(event){
+      event?.preventDefault();
+      const email=String(el('authEmail').value||'').trim().toLowerCase();
+      if(!email){ el('authMessage').textContent='Please enter your registered email address.'; return; }
+      setAuthBusy(true,'Sending verification code...');
+      const { error } = await supabaseClient.auth.signInWithOtp({ email, options:{ shouldCreateUser:false } });
+      setAuthBusy(false);
+      if(error){ console.error('Email OTP error:',error); el('authMessage').textContent='The verification code could not be sent. Check the email address and try again.'; return; }
+      authEmailValue=email;
+      el('authEmailDisplay').textContent=email;
+      showAuthStep('otp');
+      el('authMessage').textContent='An 8-digit verification code has been sent to your email.';
+    }
+    async function verifyAuthOtp(event){
+      event?.preventDefault();
+      const token=String(el('authOtp').value||'').replace(/\D/g,'').slice(0,8);
+      if(!/^\d{8}$/.test(token)){ el('authMessage').textContent='Please enter the 8-digit verification code.'; return; }
+      setAuthBusy(true,'Verifying code...');
+      const { data,error } = await supabaseClient.auth.verifyOtp({ email:authEmailValue, token, type:'email' });
+      setAuthBusy(false);
+      if(error || !data?.session){ console.error('OTP verification error:',error); el('authMessage').textContent='The code is incorrect or has expired. Request a new code and try again.'; return; }
+    }
+    async function startMooringApp(session){
+      el('authScreen').classList.add('hidden');
+      el('appShell').classList.remove('hidden');
+      const email=session?.user?.email||'';
+      el('authUserEmail').textContent=email;
+      el('authUserEmail').classList.toggle('hidden',!email);
+      if(!mooringAppStarted){
+        mooringAppStarted=true;
+        initEvents();
+        el('noteAddBtn').addEventListener('click', addNote);
+        el('noteInput').addEventListener('keydown', (e) => { if(e.ctrlKey && e.key === 'Enter'){ e.preventDefault(); addNote(); } });
+        await loadAllData();
+      }
+      setTimeout(()=>map.invalidateSize(),80);
+    }
+    function showSignedOutScreen(){
+      el('appShell').classList.add('hidden');
+      el('authScreen').classList.remove('hidden');
+      el('authChecking').classList.add('hidden');
+      el('authForm').classList.remove('hidden');
+      el('authOtp').value='';
+      showAuthStep('email');
+    }
+    async function initialiseAuthentication(){
+      if(!supabaseClient) supabaseClient=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+      const { data,error }=await supabaseClient.auth.getSession();
+      if(error) console.error('Session check error:',error);
+      if(data?.session) await startMooringApp(data.session); else showSignedOutScreen();
+      supabaseClient.auth.onAuthStateChange((event,session)=>{
+        if(session) startMooringApp(session);
+        else if(event==='SIGNED_OUT') showSignedOutScreen();
+      });
+    }
+    el('authForm').addEventListener('submit',(event)=>{ el('authOtpStep').classList.contains('hidden') ? sendAuthOtp(event) : verifyAuthOtp(event); });
+    el('authOtp').addEventListener('input',(event)=>{ event.target.value=event.target.value.replace(/\D/g,'').slice(0,8); });
+    el('authResendBtn').addEventListener('click',sendAuthOtp);
+    el('authChangeEmailBtn').addEventListener('click',()=>showAuthStep('email'));
+    el('signOutBtn').addEventListener('click',async()=>{ const {error}=await supabaseClient.auth.signOut(); if(error){ console.error('Sign-out error:',error); alert('Sign out failed: '+error.message); } });
+    initialiseAuthentication();
   </script>
 </body>
 </html>
